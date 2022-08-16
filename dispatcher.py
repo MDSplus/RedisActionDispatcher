@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import MDSplus
 import redis
 import time
@@ -256,8 +257,8 @@ class ActionServer:
                 items = message[7:].split()
                 actionNidStr = str(pathToNid(items[0], self.tree))
                 origIdent = items[1]
-                newTree = self.tree.copy()
-                t1 = threading.Thread(target=doUpdate, args = (self, actionNidStr, newTree, origIdent))
+                tree_info = self.tree.get_info()
+                t1 = threading.Thread(target=doUpdate, args = (self, actionNidStr, tree_info, origIdent))
                 t1.start()
             elif message.startswith('BUILD_TABLES:'):
                 try:
@@ -300,7 +301,8 @@ class ActionServer:
         return False
                                 
 
-def doUpdate(dispatchTable, actionNidStr, tree, inIdent):
+def doUpdate(dispatchTable, actionNidStr, tree_info, inIdent):
+    tree = MDSplus.Tree.from_info(tree_info)
     if actionNidStr in dispatchTable.inDependency.keys():
         affectedNids = dispatchTable.inDependency[actionNidStr]
         toDoNids = []
@@ -320,8 +322,9 @@ def doUpdate(dispatchTable, actionNidStr, tree, inIdent):
                 if currActionNid < 0:
                     break
                 ########################
-                currActionNode = MDSplus.TreeNode(currActionNid, dispatchTable.tree)
-                dispatchTable.actionExecutor.doAction(dispatchTable.ident, dispatchTable.tree.copy(), currActionNode.copy(), dispatchTable.actTimeout[currActionNid])
+                currActionNode = MDSplus.TreeNode(currActionNid, tree)
+                node_info = currActionNode.node_info()
+                dispatchTable.actionExecutor.doAction(dispatchTable.ident, node_info, dispatchTable.actTimeout[currActionNid])
                 ###########################
                 dispatchTable.updateMutex.acquire()
                 if currActionNid in dispatchTable.outDependency.keys():
@@ -332,8 +335,9 @@ def doUpdate(dispatchTable, actionNidStr, tree, inIdent):
             # do the same for action updates
             for currActionNid in actionUpdateNids:
                 ########################
-                currActionNode = MDSplus.TreeNode(currActionNid, dispatchTable.tree)
-                dispatchTable.actionExecutor.doAction(dispatchTable.ident, dispatchTable.tree.copy(), currActionNode, dispatchTable.actTimeout[currActionNid])
+                currActionNode = MDSplus.TreeNode(currActionNid, tree)
+                node_info = currActionNode.get_info()
+                dispatchTable.actionExecutor.doAction(dispatchTable.ident, node_info, dispatchTable.actTimeout[currActionNid])
                 ###########################
                 # action updates DO NOT TRIGGER other actions
                 ###########################
@@ -356,10 +360,11 @@ def doPhase(dispatchTable, phase):
                     currActionNid = pickNotYetDispatched(dispatchTable.experiment, dispatchTable.shot, dispatchTable.ident, actionNids, dispatchTable.tree)
             if currActionNid == -2:
                 break
-            currActionNode = MDSplus.TreeNode(currActionNid, dispatchTable.tree.copy())
+            currActionNode = MDSplus.TreeNode(currActionNid, dispatchTable.tree)
+            node_info = currActionNode.get_info()
             actionNids.remove(currActionNid)
             ######################
-            dispatchTable.actionExecutor.doAction(dispatchTable.ident, dispatchTable.tree.copy(), currActionNode, dispatchTable.actTimeout[currActionNid])
+            dispatchTable.actionExecutor.doAction(dispatchTable.ident, node_info, dispatchTable.actTimeout[currActionNid])
             ###########################
             dispatchTable.updateMutex.acquire()
             if currActionNid in dispatchTable.outDependency.keys():
@@ -377,16 +382,15 @@ class ActionExecutor:
         def __init__(self, tree, node, dispatchTable):
  #           super().__init__()
             super(ActionExecutor.Worker, self).__init__()
-            self.tree = tree
-            self.node = node
             self.dispatchTable = dispatchTable
+            self.node_info = node.get_info()
 
         def run(self):
-            self.tree = self.tree.copy()
-            self.node = self.node.copy()
+            self.node = MDSplus.TreeNode.from_info(self.node_info)
+            self.tree = self.node.tree
             task = self.node.getData().getTask()
             if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
-                self.tree.copy().tcl('do '+self.path)
+                self.tree.tcl('do '+self.node.path)
                 self.status = 1
             elif isinstance(task, MDSplus.Method):
                 try:
@@ -507,7 +511,9 @@ class ActionExecutor:
             return True
         return False    
 
-    def doAction(self, ident, tree, node, timeout = 0):
+    def doAction(self, ident, node_info, timeout = 0):
+        node = MDSplus.TreeNode.from_info(node_info)
+        tree = node.tree
         if self.isStreamed(tree, node):
             self.doActionStreamed(ident, tree, node)
         elif isinstance(node.getData().getTask(), MDSplus.String):
