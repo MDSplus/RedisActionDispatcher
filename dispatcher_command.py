@@ -3,13 +3,12 @@ import redis
 import os
 import sys
 
-
-red = redis.Redis(host=sys.argv[1])
-
-parts = sys.argv[2:]
-if(len(parts) == 0):
-    sys.exit(0)
-print(parts[0])
+parts = []
+if len(sys.argv) > 2:
+    red = redis.Redis(host=sys.argv[1])
+    parts = sys.argv[2:]
+    print(parts[0])
+    
 if len(parts) == 1 and parts[0].lower() == 'quit':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'QUIT')
 if len(parts) == 1 and parts[0].lower() == 'abort':

@@ -59,6 +59,26 @@ def sendHeader(conn, msgLen, type = 0):
         outBytes += bytearray([0])
     conn.send(bytes(outBytes))
 
+def getPorts(propertyFileName):
+    propertyF = open(propertyFileName)
+    lines =  propertyF.readlines()
+    port = 0
+    monitorPort = 0
+    infoPort = 0
+    for line in lines:
+        property = line.split('=')
+        if len(property) != 2:
+            continue
+        if property[0].strip() == 'jDispatcher.monitor_1.port' :
+            port = int(property[1].strip())
+        elif property[0].strip() == 'jDispatcher.port':
+            monitorPort = int(property[1].strip())
+        elif property[0].strip() == 'jDispatcher.info_port':
+            infoPort = int(property[1].strip())
+    propertyF.close()
+    return port, monitorPort, infoPort
+
+
 def getPhaseDict(propertyFileName):
     propertyF = open(propertyFileName)
     lines =  propertyF.readlines()
@@ -80,7 +100,35 @@ def getPhaseDict(propertyFileName):
         else:
             break
         phaseIdx += 1
+    propertyF.close()
     return phaseDict
+
+def getServerDict(propertyFileName):
+    propertyF = open(propertyFileName)
+    lines =  propertyF.readlines()
+    serverDict = {}
+    serverIdx = 1
+    while True:
+        ident = ''
+        address = ''
+        for line in lines:
+            property = line.split('=')
+            if len(property) != 2:
+                continue
+            if(property[0].strip() == 'jDispatcher.server_'+str(serverIdx)+'.class'):
+                ident = property[1].strip()
+            elif (property[0].strip() == 'jDispatcher.server_'+str(serverIdx)+'.address'):
+                address = property[1].strip()
+        if ident != '' and address != '':
+            serverDict[str(serverIdx)] = (ident, address)
+        else:
+            break
+        serverIdx += 1
+    propertyF.close()
+    return serverDict
+
+
+
 
 def buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg):
     if errMsg == None:
@@ -93,6 +141,7 @@ def buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retSta
 
 def sendMessage(sock, tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg = None):
     header, msg = buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg)
+    print('Mandio messaggio: ', msg)
     global lastShot, lastTree
     print('Spedisco: ', msg)
     lastTree = tree
@@ -258,9 +307,10 @@ def handleMonitor(connection):
             print('RICEVUTO HEADER '+str(msgLen))
             ans = recvall(connection, msgLen)
             cmd = ans.decode('utf-8')
-            print('Command: '+cmd)
-            if cmd != 'ServerQAction($,$,$,$,$,$,$,$,$,$,$,$)':
-                continue
+            print('Command BEO: '+cmd)
+ #           if cmd != 'ServerQAction($,$,$,$,$,$,$,$,$,$,$,$)':
+ #               continue
+            print('ORA LEGGO IL RESTO')
             msgLen, nargs = recvHeader(connection)
             ans = recvall(connection, 1)
             ipAddr = ''
@@ -294,7 +344,7 @@ def handleMonitor(connection):
         print('Connection terminated')
     
 
-def handleMonitor(connection):
+def handleMonitorXXX(connection):
     try:
         while True:
             print('ATTESA COMANDO')
@@ -337,25 +387,70 @@ def handleMonitor(connection):
     except:
         print('Connection terminated')
 
+def getInfo(red, ident, id):
+    isActive = red.hget('ACTION_SERVER_ACTIVE:'+ident, id) == 'ON'
+    doing = red.hget('ACTION_SERVER_DOING:'+ident, id)
+    if doing == None:
+        doing = '0'
+    return isActive, int(doing)
+
+def handleServerInfo(red, port, serverDic):
+    serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host = socket.gethostname()
+    serversock.bind((host, port))
+    serversock.listen(5) # become a server socket, maximum 5 connections
+    while(True):
+        connection, address = serversock.accept()
+        lenMsg = recvall(connection, 2)
+        l = int.from_bytes(lenMsg,'big')
+        commandBytes = recvall(connection, l)
+        command = commandBytes.decode('utf-8')
+        print('Ricevuto: ', command)
+        if command != 'servers':
+            print('Unexpected server message: '+command)
+            continue
+        numServers = len(serverDic.keys())
+        connection.send(numServers.to_bytes(4,'big'))
+        for id in serverDic.keys():
+            ident = serverDic[id][0]
+            active, doing = getInfo(red, ident, id)
+            active = True
+            doing = 0
+            lun = len(ident)
+            connection.send(lun.to_bytes(2,'big'))
+            connection.send(ident.encode('utf-8'))
+            address = serverDic[id][1]
+            lun = len(address)
+            connection.send(lun.to_bytes(2,'big'))
+            connection.send(address.encode('utf-8'))
+            if active:
+                connection.send(bytes([1]))
+            else:
+                connection.send(bytes([0]))
+            connection.send(doing.to_bytes(4,'big'))
+            print('Spedito')
 
 
-if len(sys.argv) != 5 and len(sys.argv) != 4:
-    print('usage: python dispatch_monitor.py <jDispatcher property file> <port> <commands port> [redis server]')
+if len(sys.argv) != 2 and len(sys.argv) != 3:
+    print('usage: python dispatcher_monitor.py <jDispatcher property file> [redis server]')
     sys.exit(0)
-if len(sys.argv) == 4:
+if len(sys.argv) == 2:
     red = redis.Redis(host='localhost')
 else:
-    red = redis.Redis(host=sys.argv[4])
+    red = redis.Redis(host=sys.argv[2])
 
-port = int(sys.argv[2])
-commandPort = int(sys.argv[3])
 phaseDict = getPhaseDict(sys.argv[1])
-
+serverDict = getServerDict(sys.argv[1])
+print(serverDict)
+port, commandPort, infoPort = getPorts(sys.argv[1])
 
 
 thread = threading.Thread(target = manageCommands, args = (commandPort, ))
 thread.start()
  
+thread1 = threading.Thread(target = handleServerInfo, args = (red, infoPort, serverDict,))
+thread1.start()
+
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 print('Port: '+str(port))
 host = socket.gethostname()
