@@ -12,6 +12,7 @@ import os
 import time
 import signal
 import atexit
+from datetime import datetime
 
 lastTree = ''
 lastShot = 0
@@ -33,7 +34,8 @@ def execute(treeName, shot, actionPath):
         tree = MDSplus.Tree(treeName, shot)
         node = tree.getNode(actionPath)
         task = node.getData().getTask()
-        print('Doing '+ actionPath)
+        date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+        print(date + '  Doing '+ actionPath)
         if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
             tree.tcl('do '+ actionPath)
             status = 'Success'
@@ -50,7 +52,8 @@ def execute(treeName, shot, actionPath):
     except Exception as exc:
             status = '0'
             traceback.print_exc(exc)
-    print('Done '+ actionPath)
+    date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+    print(date + ' Done '+ actionPath)
     statusFile = open(str(os.getpid()) + 'Status.out', 'w')
     statusFile.write(status)
     statusFile.flush()
