@@ -200,8 +200,15 @@ class ActionServer:
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
                     continue
-                if items[2] == self.serverId:
+                if items[1] == self.serverId:
                     self.stopped = True
+            elif msg.upper()[:4] == 'QUIT': 
+                items = msg.split('+')
+                if len(items) != 2:
+                    print('Internal error. Wrong command message: '+msg)
+                    continue
+                if items[1] == self.serverId:
+                    sys.exit(0)
             elif msg.upper()[:9] == 'HEARTBEAT':
                 items = msg.split('+')
                 if len(items) != 2:
@@ -224,7 +231,7 @@ else:
 ident = sys.argv[1]
 id = sys.argv[2]
 act = ActionServer(ident, id, red)
-atexit.register(reportExit, ident, id)
+atexit.register(reportExit, red, ident, id)
 red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
 
 act.handleCommands()

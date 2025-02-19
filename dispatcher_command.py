@@ -8,7 +8,7 @@ if len(sys.argv) > 2:
     red = redis.Redis(host=sys.argv[1])
     parts = sys.argv[2:]
     print(parts[0])
-    
+
 if len(parts) == 1 and parts[0].lower() == 'quit':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'QUIT')
 if len(parts) == 1 and parts[0].lower() == 'abort':
@@ -27,8 +27,10 @@ elif len(parts) == 3 and parts[0].lower() == 'server_stop':
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'STOP+'+parts[2])
 elif len(parts) == 3 and parts[0].lower() == 'server_abort':
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'ABORT+'+parts[2])
+elif len(parts) == 3 and parts[0].lower() == 'server_quit':
+    red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'QUIT+'+parts[2])
 else:
-    print('Invalid arguments')
+    print("Usage: python dispatcher_commands.py redis_sever <command>")
     print('Available commands: ')
     print('exit: exit this program')
     print('quit: quit dispatcher')
@@ -40,4 +42,5 @@ else:
     print('server_restart <server class> <server id>: abort pending actions and restart server')
     print('server_abort <server class> <server id> <action path>: abort specified actions')
     print('server_stop <server class> <server id>: stop server (finish pending actions) ')
+    print('server_quit <server class> <server id>: abrupt quit server')
 
