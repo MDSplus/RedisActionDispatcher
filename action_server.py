@@ -230,6 +230,7 @@ else:
 
 ident = sys.argv[1]
 id = sys.argv[2]
+print('Action server started. Server class: '+ident+', Server Id: '+id)
 act = ActionServer(ident, id, red)
 atexit.register(reportExit, red, ident, id)
 red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
