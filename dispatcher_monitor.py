@@ -401,6 +401,7 @@ def handleServerInfo(red, port, serverDic):
     serversock.listen(5) # become a server socket, maximum 5 connections
     while(True):
         connection, address = serversock.accept()
+        print('Connected to HMI Dispatch Monitor Host %s port %d'%(host, port))
         lenMsg = recvall(connection, 2)
         l = int.from_bytes(lenMsg,'big')
         commandBytes = recvall(connection, l)
@@ -409,7 +410,10 @@ def handleServerInfo(red, port, serverDic):
         if command != 'servers':
             print('Unexpected server message: '+command)
             continue
+
         numServers = len(serverDic.keys())
+        print('Number of Servers %d'%(numServers))
+
         connection.send(numServers.to_bytes(4,'big'))
         for id in serverDic.keys():
             ident = serverDic[id][0]
@@ -427,8 +431,9 @@ def handleServerInfo(red, port, serverDic):
                 connection.send(bytes([1]))
             else:
                 connection.send(bytes([0]))
-            connection.send(doing.to_bytes(4,'big'))
-            print('Spedito')
+            #Non richiesto da capire meglio interfaccia con Dispach Monitor
+            #connection.send(doing.to_bytes(4,'big'))
+            print('Spedito ', ident)
 
 
 if len(sys.argv) != 2 and len(sys.argv) != 3:
