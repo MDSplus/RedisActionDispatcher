@@ -259,16 +259,19 @@ class ActionDispatcher:
             print('Dispatch Table missing')
             return
         self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
-        seqIdents = self.seqActions[treeShot][phase].keys()
-        minSeqNumber = sys.maxsize
-        maxSeqNumber = 0
-        for seqIdent in seqIdents:
-            for seqNum in self.seqActions[treeShot][phase][seqIdent]:
-                if seqNum > maxSeqNumber:
-                    maxSeqNumber = seqNum
-                if seqNum < minSeqNumber:
-                    minSeqNumber = seqNum
-        self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)        
+        try:
+            seqIdents = self.seqActions[treeShot][phase].keys()
+            minSeqNumber = sys.maxsize
+            maxSeqNumber = 0
+            for seqIdent in seqIdents:
+                for seqNum in self.seqActions[treeShot][phase][seqIdent]:
+                    if seqNum > maxSeqNumber:
+                        maxSeqNumber = seqNum
+                    if seqNum < minSeqNumber:
+                        minSeqNumber = seqNum
+            self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
+        except:
+            print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
 
     def handleCommands(self):
         while True:

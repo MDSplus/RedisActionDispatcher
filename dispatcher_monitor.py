@@ -418,8 +418,8 @@ def handleServerInfo(red, port, serverDic):
         for id in serverDic.keys():
             ident = serverDic[id][0]
             active, doing = getInfo(red, ident, id)
-            active = True
-            doing = 0
+            #active = True
+            #doing = 0
             lun = len(ident)
             connection.send(lun.to_bytes(2,'big'))
             connection.send(ident.encode('utf-8'))
