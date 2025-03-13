@@ -79,27 +79,26 @@ def getPorts(propertyFileName):
     return port, monitorPort, infoPort
 
 
+
 def getPhaseDict(propertyFileName):
     propertyF = open(propertyFileName)
     lines =  propertyF.readlines()
     phaseDict = {}
     phaseIdx = 1
-    while True:
-        phaseName = ''
-        phaseCode = -1
-        for line in lines:
-            property = line.split('=')
-            if len(property) != 2:
-                continue
-            if(property[0].strip() == 'jDispatcher.phase_'+str(phaseIdx)+'.id'):
-                phaseCode = int(property[1].strip())
-            elif (property[0].strip() == 'jDispatcher.phase_'+str(phaseIdx)+'.name'):
-                phaseName = property[1].strip()
-        if phaseName != '' and phaseCode != -1:
+    phaseName = ''
+    phaseCode = -1000
+    for line in lines:
+        property = line.split('=')
+        if len(property) != 2:
+            continue
+        if property[0].strip().startswith('jDispatcher.phase_') and property[0].strip().endswith('.id'):
+            phaseCode = int(property[1].strip())
+        elif  property[0].strip().startswith('jDispatcher.phase_') and property[0].strip().endswith('.name'):
+            phaseName = property[1].strip()
+        if phaseName != '' and phaseCode != -1000:
             phaseDict[phaseName.upper()] = phaseCode
-        else:
-            break
-        phaseIdx += 1
+            phaseName = ''
+            phaseCode = -1000
     propertyF.close()
     return phaseDict
 
@@ -140,7 +139,11 @@ def buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retSta
     return header.encode('utf-8'), msg.encode('utf-8')
 
 def sendMessage(sock, tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg = None):
-    header, msg = buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg)
+    try:
+        header, msg = buildMessage(tree, shot, phase, nid, on, mode, serverClass, serverId, retStatus, actionPath, dateStr, errMsg)
+    except:
+        print('INTERNAL ERROR: Phase not recognized: '+ phase)
+        return
     print('Mandio messaggio: ', msg)
     global lastShot, lastTree
     print('Spedisco: ', msg)
@@ -388,7 +391,7 @@ def handleMonitorXXX(connection):
         print('Connection terminated')
 
 def getInfo(red, ident, id):
-    isActive = red.hget('ACTION_SERVER_ACTIVE:'+ident, id) == 'ON'
+    isActive = red.hget('ACTION_SERVER_ACTIVE:'+ident, id) == b'ON'
     doing = red.hget('ACTION_SERVER_DOING:'+ident, id)
     if doing == None:
         doing = '0'
@@ -445,6 +448,7 @@ else:
     red = redis.Redis(host=sys.argv[2])
 
 phaseDict = getPhaseDict(sys.argv[1])
+print(phaseDict)
 serverDict = getServerDict(sys.argv[1])
 print(serverDict)
 port, commandPort, infoPort = getPorts(sys.argv[1])

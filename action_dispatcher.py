@@ -250,6 +250,8 @@ class ActionDispatcher:
                         self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
 
                     self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
+            else: #There are still pending actions
+                self.allSeqTerminated = False
 
 
     def doPhase(self, tree, phase):
