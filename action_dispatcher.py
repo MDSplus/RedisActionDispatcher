@@ -132,7 +132,7 @@ class ActionDispatcher:
             print(d.getPath())
             disp = d.getData().getDispatch()
             when = disp.getWhen()
-            phase = disp.getPhase().data()
+            phase = disp.getPhase().data().upper()
             ident = disp.getIdent().data()
             if d.isOn():
                 if idx == 0:
@@ -229,29 +229,40 @@ class ActionDispatcher:
         self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
         print('DoSequence terminated')
 
+    def serverExists(self, ident):
+        for id in range(50): #no more than 4 servers per class assumed....
+            serverStatus = red.hget('ACTION_SERVER_ACTIVE:'+ident, str(id)) 
+            if serverStatus == b'ON':
+                return True
+        return False 
+
     def performSequenceStep(self, tree, phase):
         treeShot = tree.name+str(tree.shot)
         self.allSeqTerminated = True
         for ident in self.seqActions[treeShot][phase].keys():
-            if len(self.pendingSeqActions[ident]) == 0:
-                self.currSeqNumbers[ident] += 1 
-                while self.currSeqNumbers[ident] <= self.endSeqNumber and not self.currSeqNumbers[ident] in self.seqActions[treeShot][phase][ident].keys():
+            if self.serverExists(ident):
+                if len(self.pendingSeqActions[ident]) == 0:
                     self.currSeqNumbers[ident] += 1 
-                if self.currSeqNumbers[ident] <= self.endSeqNumber:
-                    self.allSeqTerminated = False
-                    for actNid in self.seqActions[treeShot][phase][ident][self.currSeqNumbers[ident]]:
-                        self.pendingSeqActions[ident].append(actNid)
-                        fullPath = tree.getNode(actNid).getFullPath()
-                        self.red.lpush('ACTION_SERVER_TODO:'+ident, 
-                            tree.name+'+'+str(tree.shot)+'+'+tree.getNode(actNid).getFullPath()+'+'+str(actNid)+'+'+str(self.timeouts[treeShot][actNid]))
-                        print('Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
-                        self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
-                        self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot), fullPath, 'DISPATCHED')
-                        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
+                    while self.currSeqNumbers[ident] <= self.endSeqNumber and not self.currSeqNumbers[ident] in self.seqActions[treeShot][phase][ident].keys():
+                        self.currSeqNumbers[ident] += 1 
+                    if self.currSeqNumbers[ident] <= self.endSeqNumber:
+                        self.allSeqTerminated = False
+                        for actNid in self.seqActions[treeShot][phase][ident][self.currSeqNumbers[ident]]:
+                            self.pendingSeqActions[ident].append(actNid)
+                            fullPath = tree.getNode(actNid).getFullPath()
+                            self.red.lpush('ACTION_SERVER_TODO:'+ident, 
+                                tree.name+'+'+str(tree.shot)+'+'+tree.getNode(actNid).getFullPath()+'+'+str(actNid)+'+'+str(self.timeouts[treeShot][actNid]))
+                            print('Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
+                            self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
+                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot), fullPath, 'DISPATCHED')
+                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
 
-                    self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
-            else: #There are still pending actions
-                self.allSeqTerminated = False
+                        self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
+                else: #There are still pending actions
+                    self.allSeqTerminated = False
+            else:
+                print('Server '+ident+'   MORTO!!!!')
+
 
 
     def doPhase(self, tree, phase):
@@ -277,6 +288,7 @@ class ActionDispatcher:
 
     def handleCommands(self):
         while True:
+            print('Waiting Command....')
             message = self.cmdPubsub.get_message(timeout=100)
             if message == None:
                 continue
@@ -318,8 +330,7 @@ class ActionDispatcher:
                 except:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
- #              self.doPhase(tree, parts[3])
-                thread = threading.Thread(target = self.doPhase, args = (tree, parts[3], ))
+                thread = threading.Thread(target = self.doPhase, args = (tree, parts[3].upper(), ))
                 thread.start()
             elif msg.upper()[:11] == 'DO_SEQUENCE':
                 parts = msg.split(':')
@@ -449,7 +460,7 @@ if len(sys.argv) != 1 and len(sys.argv) != 2:
 if len(sys.argv) == 1:
     red = redis.Redis(host='localhost')
 else:
-    red = redis.Redis(host=sys.argv[2])
+    red = redis.Redis(host=sys.argv[1])
     
 act = ActionDispatcher(red)
 thread = Thread(target = manageNotifications, args = (act, ))

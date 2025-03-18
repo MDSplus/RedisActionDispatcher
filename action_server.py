@@ -24,6 +24,12 @@ def closeStdout(signum, frame):
 def reportExit(red, ident, id):
     red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
 
+def makeASCII(txt):
+    outTxt = ''
+    for char in txt:
+        if ord(char) <= 127:
+            outTxt += char
+    return outTxt
 
 def execute(treeName, shot, actionPath):
     signal.signal(signal.SIGTERM, closeStdout)
@@ -61,7 +67,6 @@ def execute(treeName, shot, actionPath):
     #os.fsync(outFd)
     outFd.flush()
     outFd.close()
-     
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
@@ -102,7 +107,9 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
         red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
         if notifyDone:
-            red.publish('ACTION_DISPATCHER_PUBSUB', treeName +'+'+str(shot)+'+'+ident + '+' + actionPath+'+'+status+'+'+log)
+            st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
+            st += '+'+makeASCII(log)
+            red.publish('ACTION_DISPATCHER_PUBSUB',st)
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
