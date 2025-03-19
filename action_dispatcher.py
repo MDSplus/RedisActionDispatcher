@@ -236,7 +236,7 @@ class ActionDispatcher:
                 return True
         return False 
 
-    def performSequenceStep(self, tree, phase):
+    def performSequenceStepXXX(self, tree, phase):
         treeShot = tree.name+str(tree.shot)
         self.allSeqTerminated = True
         for ident in self.seqActions[treeShot][phase].keys():
@@ -263,7 +263,39 @@ class ActionDispatcher:
             else:
                 print('Server '+ident+'   MORTO!!!!')
 
+    def performSequenceStep(self, tree, phase):
+        treeShot = tree.name+str(tree.shot)
+        self.allSeqTerminated = True
+        for ident in self.seqActions[treeShot][phase].keys():
+            serverExists = self.serverExists(ident)
+            if len(self.pendingSeqActions[ident]) == 0:
+                self.currSeqNumbers[ident] += 1 
+                while self.currSeqNumbers[ident] <= self.endSeqNumber and not self.currSeqNumbers[ident] in self.seqActions[treeShot][phase][ident].keys():
+                    self.currSeqNumbers[ident] += 1 
+                if self.currSeqNumbers[ident] <= self.endSeqNumber:
+                    self.allSeqTerminated = False
+                    for actNid in self.seqActions[treeShot][phase][ident][self.currSeqNumbers[ident]]:
+                        fullPath = tree.getNode(actNid).getFullPath()
+                        if serverExists:
+                            self.pendingSeqActions[ident].append(actNid)
+                            self.red.lpush('ACTION_SERVER_TODO:'+ident, 
+                                tree.name+'+'+str(tree.shot)+'+'+tree.getNode(actNid).getFullPath()+'+'+str(actNid)+'+'+str(self.timeouts[treeShot][actNid]))
+                            print('Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
+                            self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
+                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot), fullPath, 'DISPATCHED')
+                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
+                        else:
+                            print('SERVER MISSING per '+fullPath)
+                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot), fullPath, 'DONE')
+                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
+                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
+                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')
 
+                    if serverExists:        
+                        self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
+            else: #There are still pending actions
+                self.allSeqTerminated = False
+            
 
     def doPhase(self, tree, phase):
         self.currPhase = phase
