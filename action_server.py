@@ -70,7 +70,7 @@ def execute(treeName, shot, actionPath):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
-        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING '+str(serverId))
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
@@ -199,7 +199,7 @@ class ActionServer:
                 if items[1] == self.serverId:
                     actionPaths = self.red.hkeys('ACTION_INFO:'+lastTree+':'+lastShot+':'+self.ident)
                     for actionPath in actionPaths:
-                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath) == b'DOING':
+                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath).decode('utf-8') == ('DOING '+str(self.serverId)):
                             self.red.hset('ABORT_REQUESTS:'+self.ident, actionPath, '1')
                     self.stopped = False
             elif msg.upper()[:4] == 'STOP': 
