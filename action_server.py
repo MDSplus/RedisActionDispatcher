@@ -221,7 +221,7 @@ class ActionServer:
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
                     continue
-                if items[2] == self.serverId:
+                if items[1] == self.serverId:
                     self.red.hincrby('ACTION_SERVER_HEARTBEAT:'+self.ident, self.serverId, 1)
             else:
                 print('INVALID MESSAGE: '+msg)
