@@ -240,6 +240,8 @@ def handleNotification(sock):
             else:
                 statusCode = '0'
             sendMessage(sock, tree, shot, phase, nid, '1', MonitorDone, ident, serverId, statusCode,  actionPath, str(datetime.now()), status)
+        elif parts[0] == 'DEAD':
+            print('Server '+parts[3]+' id: '+parts[4]+  'died!!!!')
         else:
             print('Unexpected message: '+parts[0])                
 
@@ -403,6 +405,7 @@ def handleServerInfo(red, port, serverDic):
     serversock.bind((host, port))
     serversock.listen(5) # become a server socket, maximum 5 connections
     while(True):
+        print('Waiting connection from HMI dispatch monitor...')
         connection, address = serversock.accept()
         print('Connected to HMI Dispatch Monitor Host %s port %d'%(host, port))
         lenMsg = recvall(connection, 2)
@@ -420,7 +423,9 @@ def handleServerInfo(red, port, serverDic):
         connection.send(numServers.to_bytes(4,'big'))
         for id in serverDic.keys():
             ident = serverDic[id][0]
-            active, doing = getInfo(red, ident, id)
+
+            active, doing = getInfo(red, ident, 1) #Ora tutti i server id sono 1!!!!!!!!!!
+ #           active, doing = getInfo(red, ident, id)
             #active = True
             #doing = 0
             lun = len(ident)
