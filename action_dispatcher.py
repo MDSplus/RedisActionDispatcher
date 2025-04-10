@@ -186,6 +186,8 @@ class ActionDispatcher:
 
                     self.actionDispatchStatus[treeShot][actNid] = self.NOT_DISPATCHED
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(actNid).getFullPath(), 'NOT_DISPATCHED')
+                    self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot), tree.getNode(actNid).getFullPath(), ident)
+                    self.red.hset('ACTION_PHASE_INFO:'+tree.name+':'+str(tree.shot), tree.getNode(actNid).getFullPath(), phase)
                 except Exception as e:
                     print('Error collecting action ' + d.getPath()+ ': '+str(e))
             else: #d is off
@@ -195,6 +197,8 @@ class ActionDispatcher:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
                 else:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
+
+   
         self.printTables()
 
 
@@ -297,6 +301,7 @@ class ActionDispatcher:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
         except:
+            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
 
     def handleCommands(self):

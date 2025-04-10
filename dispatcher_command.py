@@ -18,7 +18,20 @@ elif len(parts) == 3 and parts[0].lower() == 'create_pulse':
 elif len(parts) == 3 and parts[0].lower() == 'build_tables':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+parts[1]+':'+parts[2])
 elif len(parts) == 4 and parts[0].lower() == 'do_phase':
+    monPubsub = red.pubsub()
+    monPubsub.subscribe('DISPATCH_MONITOR_PUBSUB')
     red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+parts[1]+':'+parts[2]+':'+parts[3])
+    while(True):
+        message = monPubsub.get_message(timeout=100)
+        if message == None:
+            continue
+        if not 'data' in message.keys() or not isinstance(message['data'], bytes):
+                continue
+        msg = message['data'].decode('utf8')
+        print(msg)
+        parts = msg.split('+')
+        if parts[0] == 'END_PHASE':
+            break
 elif len(parts) == 6 and parts[0].lower() == 'do_sequence':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'do_sequence:'+parts[1]+':'+parts[2]+':'+parts[3]+':'+parts[4]+':'+parts[5])
 elif len(parts) == 3 and parts[0].lower() == 'server_restart':
@@ -28,11 +41,15 @@ elif len(parts) == 3 and parts[0].lower() == 'server_stop':
 elif len(parts) == 3 and parts[0].lower() == 'server_abort':
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'ABORT+'+parts[2])
 elif len(parts) == 3 and parts[0].lower() == 'server_quit':
+    serverStatus = red.hget('ACTION_SERVER_ACTIVE:'+parts[1], parts[2])
+    if serverStatus != 'ON':
+        print('Server was not active')
+    else:
+        print('Server was not active')
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'QUIT+'+parts[2])
 else:
     print("Usage: python dispatcher_commands.py redis_sever <command>")
     print('Available commands: ')
-    print('exit: exit this program')
     print('quit: quit dispatcher')
     print('abort: abort current sequence')
     print('create_pulse <tree> <shot>: create pulse file')
