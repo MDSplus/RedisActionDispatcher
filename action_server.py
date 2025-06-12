@@ -110,7 +110,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
             st += '+'+makeASCII(log)
             red.publish('ACTION_DISPATCHER_PUBSUB',st)
-        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE'+str(serverId))
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
@@ -221,10 +221,19 @@ class ActionServer:
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
                     continue
-                if items[1] == self.serverId:
+                if items[2] == self.serverId:
                     self.red.hincrby('ACTION_SERVER_HEARTBEAT:'+self.ident, self.serverId, 1)
             else:
                 print('INVALID MESSAGE: '+msg)
+
+
+
+
+def reportServerOn(red, ident, id):
+    while True:
+        red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
+        time.sleep(1)
+
 
 
 if len(sys.argv) != 3 and len(sys.argv) != 4:
@@ -240,7 +249,9 @@ id = sys.argv[2]
 print('Action server started. Server class: '+ident+', Server Id: '+id)
 act = ActionServer(ident, id, red)
 atexit.register(reportExit, red, ident, id)
-red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
+#red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
+thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
+thread.start()
 
 act.handleCommands()
    
