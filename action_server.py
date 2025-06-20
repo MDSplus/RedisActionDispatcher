@@ -122,7 +122,15 @@ class WorkerAction:
         self.treeName = treeName
         self.shot = shot
         self.actionPath = actionPath
-        self.actionNid = actionNid
+        if actionNid == '0':
+            try:
+                t = MDSplus.Tree(treeName, int(shot))
+                self.actionNid = str(t.getNode(actionPath).getNid())
+            except:
+                print("Failed to retrieve NID for redispatch")
+                self.actionNid = '0'
+        else:
+            self.actionNid = actionNid
         self.timeout = timeout
         self.red = red
         self.ident = ident
