@@ -70,7 +70,7 @@ def execute(treeName, shot, actionPath):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
-        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING '+str(serverId))
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
@@ -110,7 +110,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
             st += '+'+makeASCII(log)
             red.publish('ACTION_DISPATCHER_PUBSUB',st)
-        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE'+str(serverId))
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
