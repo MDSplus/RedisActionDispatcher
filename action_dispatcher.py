@@ -303,6 +303,7 @@ class ActionDispatcher:
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
+            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
