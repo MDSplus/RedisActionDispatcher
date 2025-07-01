@@ -275,6 +275,7 @@ class ActionDispatcher:
                         else:
                             print('SERVER MISSING for '+fullPath)
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                            self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'NotExecuted')
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')

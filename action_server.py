@@ -72,7 +72,8 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
-        #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
+        red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
+       #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
         pid = p.pid
         if timeout == 0:
@@ -177,6 +178,7 @@ class ActionServer:
             lastTree = items[0]
             lastShot = items[1]
             self.red.hincrby('ACTION_SERVER_DOING:'+self.ident, self.serverId, 1)
+            
             worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, notifyDone)
             worker.spawn()
 
