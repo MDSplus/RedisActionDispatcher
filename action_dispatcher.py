@@ -139,6 +139,9 @@ class ActionDispatcher:
             when = disp.getWhen()
             phase = disp.getPhase().data().upper()
             ident = disp.getIdent().data()
+            actNid = d.getNid()
+            if not ident in self.identList:
+                self.identList.append(ident)
             if d.isOn():
                 if idx == 0:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
@@ -146,7 +149,6 @@ class ActionDispatcher:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
                 else:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
-                actNid = d.getNid()
                 try:
                     try:
                         timeout = int(d.getTimeout().data())
@@ -160,8 +162,6 @@ class ActionDispatcher:
                         self.depActions[treeShot][phase] = {}
                     if not ident in self.depActions[treeShot][phase].keys(): 
                         self.depActions[treeShot][phase][ident] = []
-                    if not ident in self.identList:
-                        self.identList.append(ident)
                     if isinstance(when, MDSplus.Scalar):
                         seqNum = int(when.data())
                         if not seqNum in self.seqActions[treeShot][phase][ident].keys():
@@ -198,6 +198,7 @@ class ActionDispatcher:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
                 else:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
+                self.idents[treeShot][actNid] = ident  #Record in any case the action's server
                 self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), d.getFullPath(), 'none')
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
 
