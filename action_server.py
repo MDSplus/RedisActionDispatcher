@@ -85,6 +85,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
                 break
             else:
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
+                    red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
             
         if p.exitcode == None: #not yet terminated
