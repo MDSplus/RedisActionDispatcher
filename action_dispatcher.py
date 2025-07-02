@@ -399,7 +399,7 @@ class ActionDispatcher:
             path = parts[3]
             print('Action '+parts[3]+ '   terminated. Status:  '+ parts[4])
             self.actionDispatchStatus[treeShot][actionNid] = self.DONE
-            self.red.hset('ACTION_STATUS:'+treeName+':'+str(shot), path, parts[4])
+            # self.red.hset('ACTION_STATUS:'+treeName+':'+str(shot), path, parts[4]) Already done by server
             if len(parts) >= 4:
                 self.red.hset('ACTION_LOG:'+treeName+':'+str(shot), parts[3], msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
 
