@@ -72,6 +72,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+        print('SET ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
        #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
@@ -116,6 +117,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
  
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
 
@@ -234,7 +236,7 @@ class ActionServer:
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
                     continue
-                if items[2] == self.serverId:
+                if items[1] == self.serverId:
                     self.red.hincrby('ACTION_SERVER_HEARTBEAT:'+self.ident, self.serverId, 1)
             else:
                 print('INVALID MESSAGE: '+msg)
