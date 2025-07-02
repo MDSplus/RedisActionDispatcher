@@ -140,6 +140,8 @@ class ActionDispatcher:
             phase = disp.getPhase().data().upper()
             ident = disp.getIdent().data()
             actNid = d.getNid()
+            if not ident in self.identList:
+                self.identList.append(ident)
             if d.isOn():
                 if idx == 0:
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
@@ -181,8 +183,6 @@ class ActionDispatcher:
                             self.depAffected[treeShot][depNid] = []
                         self.depAffected[treeShot][depNid].append(d.getNid())
 
-                    if not ident in self.identList:
-                        self.identList.append(ident)
                     self.actionDispatchStatus[treeShot][actNid] = self.NOT_DISPATCHED
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(actNid).getFullPath(), 'NOT_DISPATCHED')
                     self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot), tree.getNode(actNid).getFullPath(), ident)

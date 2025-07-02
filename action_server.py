@@ -72,7 +72,6 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
-        print('SET ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
        #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
