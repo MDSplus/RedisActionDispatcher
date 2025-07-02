@@ -112,6 +112,8 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
             st += '+'+makeASCII(log)
             red.publish('ACTION_DISPATCHER_PUBSUB',st)
+        else:  #report in any case the status
+            red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)

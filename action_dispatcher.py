@@ -271,6 +271,7 @@ class ActionDispatcher:
                             print('Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
                             self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DISPATCHED')
+                            self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'None') 
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
                         else:
                             print('SERVER MISSING for '+fullPath)
@@ -426,6 +427,7 @@ class ActionDispatcher:
                             treeName+'+'+str(shot)+'+'+tree.getNode(depNid).getFullPath()+'+'+str(depNid)+'+'+str(self.timeouts[treeShot][depNid]))
                         print('Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
                         self.red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'DISPATCHED')
+                        self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'none')
                         if not ident in self.pendingDepActions.keys():
                             self.pendingDepActions[ident] = []
                         self.pendingDepActions[ident].append(depNid)
@@ -461,6 +463,7 @@ class ActionDispatcher:
                 print('Removing action due to server crash: ', fullPath)
                 self.pendingSeqActions[ident].remove(actionNid)
                 self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
                 self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
                 if len(self.pendingSeqActions[ident]) == 0:
                     self.updateEvent.set()
@@ -480,6 +483,7 @@ class ActionDispatcher:
                 print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
                 self.pendingDepActions[ident].remove(actionNid)
                 self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
                 self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
                 if len(self.pendingDepActions[ident]) == 0:
                     self.updateEvent.set()
