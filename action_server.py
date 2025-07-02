@@ -108,11 +108,13 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             status = 'Aborted'
 
         red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
-        red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
         if notifyDone:
             st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
             st += '+'+makeASCII(log)
             red.publish('ACTION_DISPATCHER_PUBSUB',st)
+        else:
+            red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
+ 
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
