@@ -203,7 +203,6 @@ class ActionDispatcher:
 
         
         self.printTables()
-        print('\n\nIDENT LIST: ', self.identList);
 
     def handleAbort(self):
         self.aborted = True
@@ -506,6 +505,8 @@ class ActionDispatcher:
             idents = self.identList.copy()
             for ident in idents:
                 ids = self.getServerIds(ident)
+                if len(ids) == 0:
+                    ids = [1] #Handle the case the server did not start and did not register itself 
                 for id in ids:
                     currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id)) 
                     if currHeartbeat == None: #Server never started
@@ -585,6 +586,7 @@ def manageWatchdog(actDisp):
 if len(sys.argv) != 1 and len(sys.argv) != 2:
     print('usage: python action_dispatcher.py [redis server]')
     sys.exit(0)
+
 if len(sys.argv) == 1:
     red = redis.Redis(host='localhost')
 else:
