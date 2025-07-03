@@ -354,6 +354,9 @@ class ActionDispatcher:
                 except:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
+#report current phase for dispatch monitor
+                self.red.hset('CURRENT_PHASE', parts[1], parts[3])
+
                 thread = threading.Thread(target = self.doPhase, args = (tree, parts[3].upper(), ))
                 thread.start()
             elif msg.upper()[:11] == 'DO_SEQUENCE':
