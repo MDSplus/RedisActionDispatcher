@@ -201,9 +201,9 @@ class ActionDispatcher:
                 self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), d.getFullPath(), 'none')
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
 
-   
+        
         self.printTables()
-
+        print('\n\nIDENT LIST: ', self.identList);
 
     def handleAbort(self):
         self.aborted = True
