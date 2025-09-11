@@ -11,10 +11,10 @@ import json
 
 
 LOG_FILE = "redis_pubsub.log"
-host='localhost'
+redishost='localhost'
 
 app = Flask(__name__)
-client = redis.StrictRedis(host, port=6379, decode_responses=True)
+client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
 redis_client = client
 
 lock = Lock()
@@ -97,7 +97,7 @@ def message_handler(message):
 
 def log_all_channels():
     setup_logger()
-    client = redis.StrictRedis(host, port=6379, decode_responses=True)
+    client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
     pubsub = client.pubsub()
     
     channels = client.pubsub_channels()
@@ -122,7 +122,7 @@ def log_all_channels():
 def server_list():
     setup_logger()
     
-    client = redis.StrictRedis(host, port=6379, decode_responses=True)
+    client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
     pubsub = client.pubsub()
     
     channels = client.pubsub_channels()
@@ -916,7 +916,7 @@ if __name__ == "__main__":
 
     
     #Initialize red to be able to call functions from dispatcher_monitor.py and action_server.py  
-    red = redis.Redis(host)
+    red = redis.Redis(redishost)
 
 
     app.run(debug=True, host='0.0.0.0', port=3000, threaded=True)
