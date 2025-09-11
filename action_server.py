@@ -12,6 +12,7 @@ import os
 import time
 import signal
 import atexit
+
 from datetime import datetime
 
 lastTree = ''
@@ -23,6 +24,7 @@ def closeStdout(signum, frame):
 
 def reportExit(red, ident, id):
     red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
+    os._exit(0)
 
 def makeASCII(txt):
     outTxt = ''
@@ -155,6 +157,7 @@ class ActionServer:
         self.serverId = serverId
         self.updPubsub = red.pubsub()
         self.updPubsub.subscribe('ACTION_SERVER_PUBSUB:'+ident)
+        print('Listening to '+'ACTION_SERVER_PUBSUB:'+ident)
         self.pendingPids = []
         self.updateMutex = threading.Lock()
         self.updateEvent = threading.Event()
@@ -206,7 +209,6 @@ class ActionServer:
                     self.red.hset('ABORT_REQUESTS:'+self.ident, items[1], '1')
             elif msg.upper()[:7] == 'RESTART':
                 items = msg.split('+')
-                print(items)
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
                     continue
@@ -229,7 +231,10 @@ class ActionServer:
                     print('Internal error. Wrong command message: '+msg)
                     continue
                 if items[1] == self.serverId:
-                    sys.exit(0)
+                    print('Server exit')
+                    red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
+                    os._exit(0)
+                    #sys.exit(0)
             elif msg.upper()[:9] == 'HEARTBEAT':
                 items = msg.split('+')
                 if len(items) != 2:
@@ -262,7 +267,7 @@ ident = sys.argv[1]
 id = sys.argv[2]
 print('Action server started. Server class: '+ident+', Server Id: '+id)
 act = ActionServer(ident, id, red)
-atexit.register(reportExit, red, ident, id)
+#atexit.register(reportExit, red, ident, id)
 #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
 thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
 thread.start()
