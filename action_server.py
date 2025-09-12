@@ -12,6 +12,7 @@ import os
 import time
 import signal
 import atexit
+import socket
 
 from datetime import datetime
 
@@ -165,6 +166,9 @@ class ActionServer:
         self.stopped = False
         red.hset('ACTION_SERVER_HEARTBEAT:'+self.ident, self.serverId, '0')
         red.hset('ACTION_SERVER_DOING:'+self.ident, self.serverId, '0')
+        ip = socket.gethostbyname(socket.gethostname())
+        red.hset('ACTION_SERVER_IP:'+self.ident, self.serverId, ip)
+
 
     def handleDo(self):
         global lastTree, lastShot

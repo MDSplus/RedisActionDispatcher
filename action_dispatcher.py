@@ -135,11 +135,15 @@ class ActionDispatcher:
         for idx in range(len(dd)):
             d = dd[idx]
             print(d.getPath())
-            disp = d.getData().getDispatch()
-            when = disp.getWhen()
-            phase = disp.getPhase().data().upper()
-            ident = disp.getIdent().data()
-            actNid = d.getNid()
+            try:
+                disp = d.getData().getDispatch()
+                when = disp.getWhen()
+                phase = disp.getPhase().data().upper()
+                ident = disp.getIdent().data()
+                actNid = d.getNid()
+            except:
+                print('Error reading action '+d.getPath())
+                continue
             if not ident in self.identList:
                 self.identList.append(ident)
             if d.isOn():
@@ -200,6 +204,7 @@ class ActionDispatcher:
                 self.idents[treeShot][actNid] = ident  #Record in any case the action's server
                 self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), d.getFullPath(), 'none')
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
+                self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(actNid).getFullPath(), 'OFF')
 
         
         self.printTables()
@@ -274,7 +279,8 @@ class ActionDispatcher:
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
                         else:
                             print('SERVER MISSING for '+fullPath)
-                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                            #self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'NotExecuted')
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
                             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
