@@ -52,6 +52,10 @@ def execute(treeName, shot, actionPath):
             status = task.getObject().doMethod(task.getMethod())
             if status == None:
                 status = 'Success'
+            elif status % 2 != 0:
+                status = 'Success'
+	    else:
+                status = 'Failure'
         else:
             status = int(task.data())
             if status % 2 != 0:
@@ -59,11 +63,12 @@ def execute(treeName, shot, actionPath):
             else:
                 status = 'Failure'
     except Exception as exc:
-            status = '0'
+            status = 'Unknown'
             traceback.print_exc(exc)
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
     print(date + ' Done '+ actionPath)
     statusFile = open(str(os.getpid()) + 'Status.out', 'w')
+#    statusFile.write('PERDINDIRIDINA')
     statusFile.write(status)
     statusFile.flush()
     statusFile.close()
@@ -106,7 +111,9 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             statusFile =  open(str(pid) + 'Status.out', 'r')
             status = statusFile.read()
             statusFile.close()
-            os.system('rm '+str(pid) + 'Status.out')
+ #           os.system('rm '+str(pid) + 'Status.out')
+            if status == None or len(status) == 0:
+                status = 'Unknown Error'
         except:
             status = 'Aborted'
 
