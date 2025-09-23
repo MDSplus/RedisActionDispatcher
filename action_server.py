@@ -13,11 +13,13 @@ import time
 import signal
 import atexit
 import socket
-
+import threading 
 from datetime import datetime
 
 lastTree = ''
 lastShot = 0
+
+lastId = 0
 
 def closeStdout(signum, frame):
     sys.stdout.flush()
@@ -34,7 +36,7 @@ def makeASCII(txt):
             outTxt += char
     return outTxt
 
-def execute(treeName, shot, actionPath):
+def executeXXXX(treeName, shot, actionPath):
     signal.signal(signal.SIGTERM, closeStdout)
     outFd = open(str(os.getpid())+'Log.out',  'a')
     os.dup2(outFd.fileno(), 1)
@@ -63,7 +65,7 @@ def execute(treeName, shot, actionPath):
             else:
                 status = 'Failure'
     except Exception as exc:
-            status = 'Unknown'
+            status = 'Failure'
             traceback.print_exc(exc)
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
     print(date + ' Done '+ actionPath)
@@ -76,7 +78,7 @@ def execute(treeName, shot, actionPath):
     outFd.flush()
     outFd.close()
 
-def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
+def handleExecuteXXXX(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
         p = Process(target=execute, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
@@ -111,7 +113,105 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             statusFile =  open(str(pid) + 'Status.out', 'r')
             status = statusFile.read()
             statusFile.close()
- #           os.system('rm '+str(pid) + 'Status.out')
+            os.system('rm '+str(pid) + 'Status.out')
+            if status == None or len(status) == 0:
+                status = 'Unknown Error'
+        except:
+            status = 'Aborted'
+
+        red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
+        if notifyDone:
+            st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
+            st += '+'+makeASCII(log)
+            red.publish('ACTION_DISPATCHER_PUBSUB',st)
+        else:
+            red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
+ 
+        red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
+        red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
+
+def execute(treeName, shot, actionPath, tid):
+    originalStdoutFd = os.dup(1)  # duplicate fd 1
+    outFd = open(str(tid)+'Log.out',  'a')
+    os.dup2(outFd.fileno(), 1)
+
+    try:
+        tree = MDSplus.Tree(treeName, shot)
+        node = tree.getNode(actionPath)
+        task = node.getData().getTask()
+        date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+        print(date + '  Doing '+ actionPath)
+        if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
+            tree.tcl('do '+ actionPath)
+            status = 'Success'
+        elif isinstance(task, MDSplus.Method):
+            status = task.getObject().doMethod(task.getMethod())
+            if status == None:
+                status = 'Success'
+            elif status % 2 != 0:
+                status = 'Success'
+	    else:
+                status = 'Failure'
+        else:
+            status = int(task.data())
+            if status % 2 != 0:
+                status = 'Success'
+            else:
+                status = 'Failure'
+    except Exception as exc:
+            status = 'Failure'
+            traceback.print_exc(exc)
+    date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+    print(date + ' Done '+ actionPath)
+    statusFile = open(str(tid) + 'Status.out', 'w')
+    statusFile.write(status)
+    statusFile.flush()
+    statusFile.close()
+    #os.fsync(outFd)
+    outFd.flush()
+    outFd.close()
+
+    os.dup2(originalStdoutFd, 1)
+
+
+def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex):
+        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, ))
+        mutex.acquire()
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
+        red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+        red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
+        t.start()
+        if timeout == 0:
+            timeoutSecs = 1000000
+        else:
+            timeoutSecs = int(timeout)
+        for i in range(timeoutSecs):
+            t.join(0.5)
+            if not t.isAlive():
+                break
+            else:
+                if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
+                    red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
+                    break
+        mutex.release()
+#Cannot terminate a thread......      
+#        if t.isAlive(): #not yet terminated
+#            p.terminate()
+
+
+        logFile = open(str(tid) + 'Log.out', 'r')
+        log = logFile.read()
+        logFile.close()
+        os.system('rm '+str(tid) + 'Log.out')
+        print("LOG:")
+        print(log)
+        print("*****")
+        try:
+            statusFile =  open(str(tid) + 'Status.out', 'r')
+            status = statusFile.read()
+            statusFile.close()
+            os.system('rm '+str(tid) + 'Status.out')
             if status == None or len(status) == 0:
                 status = 'Unknown Error'
         except:
@@ -133,7 +233,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
 
 class WorkerAction:
-    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, notifyDone = True):
+    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, mutex, notifyDone = True):
         self.treeName = treeName
         self.shot = shot
         self.actionPath = actionPath
@@ -151,12 +251,17 @@ class WorkerAction:
         self.ident = ident
         self.serverId = serverId
         self.notifyDone = notifyDone
+        self.mutex = mutex
     
     def spawn(self):
+        global lastId
+        tid = threading.current_thread().ident + lastId
+        lastId = lastId + 1
         self.red.hset('ABORT_REQUESTS:'+self.ident, self.actionPath, '0')
-        p = Process(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone,))
+        p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.mutex))
         p.start()
-
+#serialize operations carried out by this server in order not to mix outputs
+	#handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, mutex)
 
 
 class ActionServer:
@@ -177,7 +282,7 @@ class ActionServer:
         red.hset('ACTION_SERVER_IP:'+self.ident, self.serverId, ip)
 
 
-    def handleDo(self):
+    def handleDo(self, mutex):
         global lastTree, lastShot
         while True:
             toDoMsg = self.red.lpop('ACTION_SERVER_TODO:'+self.ident)
@@ -196,13 +301,14 @@ class ActionServer:
             lastShot = items[1]
             self.red.hincrby('ACTION_SERVER_DOING:'+self.ident, self.serverId, 1)
             
-            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, notifyDone)
+            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, mutex, notifyDone)
             worker.spawn()
 
     def handleCommands(self):
         if self.stopped:
             return
-        self.handleDo()
+        mutex = threading.Lock()
+        self.handleDo(mutex)
         while True:
             message = self.updPubsub.get_message(timeout=100)
             if message == None:
@@ -211,7 +317,7 @@ class ActionServer:
                 continue
             msg = message['data'].decode('utf8')
             if len(msg) == 2 and msg.upper() == 'DO':
-                self.handleDo()
+                self.handleDo(mutex)
             elif len(msg) > 5 and msg[:5].upper() == 'ABORT':
                 items = msg.split('+')
                 if len(items) != 2:
