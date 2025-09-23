@@ -177,10 +177,10 @@ def execute(treeName, shot, actionPath, tid):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, ))
+        mutex.acquire()
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
-        mutex.acquire()
         t.start()
         if timeout == 0:
             timeoutSecs = 1000000
