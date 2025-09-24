@@ -11,7 +11,8 @@ import json
 
 
 LOG_FILE = "redis_pubsub.log"
-redishost='localhost'
+redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var
+print(f"Redis host set to: {redishost}")
 
 app = Flask(__name__)
 client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
@@ -230,6 +231,10 @@ TEMPLATE = """
             background-color: #fff3cd; /* Light Orange/Yellow */
             color: #856404;            /* Dark Orange/Brown */
         }
+	.grey {
+            background-color: #CCCCCC; /* Light Grey */
+            color: #ffffff;            /* Dark Grey */
+        }
         
         button {
             margin-right: 5px;
@@ -361,9 +366,10 @@ TEMPLATE = """
                 <td>${item.key}</td>
                 <td>${item.status}</td>
                 <td>
-                    <button onclick="sendCommand('${item.key}', 'START')">Start</button>
-                    <button onclick="sendCommand('${item.key}', 'STOP')">Stop</button>
-                    <button onclick="sendCommand('${item.key}', 'RESTART')">Restart</button>
+                    <button onclick="sendCommand('${item.key}', 'START')">Start Server</button>
+                    <button onclick="sendCommand('${item.key}', 'QUIT')">Quit Server</button>
+                    <button onclick="sendCommand('${item.key}', 'RESTART')">Restart Server</button>
+                    <button onclick="sendCommand('${item.key}', 'STOP')">Stop Actions</button>
                     <button onclick="sendCommand('${item.key}', 'SERVER_LOG')">Server Log</button>
 
                 </td>`;
@@ -398,7 +404,8 @@ TEMPLATE = """
         let failed = 0;
         let aborted = 0; 
         let success = 0; 
-        let unknown = 0;      
+        let unknown = 0; 
+        let off = 0;     
 
 
         data_active.forEach(item => {
@@ -411,9 +418,16 @@ TEMPLATE = """
             } else if (item.status === 'DONE' && item.state === '0') {
                 row_active.className = 'red';
                 item.state = 'Failed';
+            } else if (item.status === 'DONE' && item.state === 'Failure') {
+                row_active.className = 'red';
             } else if (item.status === 'DONE' && item.state === 'Aborted') {
                 row_active.className = 'red';
-            
+            } else if (item.status === 'Unknown') {
+                row_active.className = 'orange';
+            } else if (item.status === 'OFF') {
+                row_active.className = 'grey';           
+            } else if (item.status === 'SERVER_OFF') {
+                row_active.className = 'grey';           
             } else {
                 row_active.className = 'orange';
             }
@@ -456,18 +470,30 @@ TEMPLATE = """
                 row.className = 'red';
                 item.state = 'Failed';
                 failed++;
+            } else if (item.status === 'DONE' && item.state === 'Failure') {
+                row.className = 'red';
+                failed++;
             } else if (item.status === 'DONE' && item.state === 'Aborted') {
                 row.className = 'red';
                 aborted++;
+
+            } else if (item.state === 'Unknown') {
+                row.className = 'orange';
+            } else if (item.status === 'OFF') {
+                row.className = 'grey';
+                off++;
+            } else if (item.status === 'SERVER_OFF') {
+                row.className = 'grey';
+                off++;
             
             } else {
                 row.className = 'orange';
             }
             
-            dispatched=total-not_dispatched;
-            doing=total-not_dispatched-done;
+            dispatched=total-not_dispatched-off;
+            doing=total-not_dispatched-done-off;
 
-            unknown=done-failed-success;
+            unknown=done-failed-success-aborted;
             
             row.innerHTML = `
                 <td>${item.tree}</td>
@@ -487,7 +513,7 @@ TEMPLATE = """
         });
         summary.innerHTML = `
             <font color="brown">
-                Active actions: ${total} &nbsp;
+                Active actions: ${total-off} &nbsp;
             </font>     
             <font color="blue">
                 Dispatched: ${dispatched} &nbsp;
@@ -621,6 +647,10 @@ def get_data():
                     'key': key,
                     'status': value
                 })
+
+            # Sort: first by whether status is 'ON' (False < True), then alphabetically by key
+            data.sort(key=lambda x: (x['status'] != 'ON', x['key']))
+
             yield f"data: {json.dumps(data)}\n\n"
             #print(f"data: {json.dumps(data)}\n\n")
             time.sleep(5)
@@ -748,6 +778,9 @@ def get_action_data():
                 filtered_data,
                 key=lambda x: (-int(x['shot']), -ord(x['server'][0] ), x['key'])
             )
+            # Sort: first by whether status is 'ON' (False < True), then alphabetically by key
+            sorted_data.sort(key=lambda x: (x['status'] == 'OFF', x['key']))
+
             #yield f"data_active: {json.dumps(data_active)}\n\n"
             #yield f"data: {json.dumps(sorted_data)}\n\n"
             yield f"data: {json.dumps({'data': sorted_data, 'data_active': data_active})}\n\n"
@@ -763,14 +796,25 @@ def handle_command():
     server_key = data.get('server_key')
     command = data.get('command')
 
-
     # Example: Print or log the received command
     # print(f"Received command: {server_key} {command}")
     # logging.warning(f"Received command: {server_key} {command}")
 
-    if command == 'START' or command == 'STOP' or command == 'RESTART':
+    if command == 'START':
         cmd = f"server_command.sh {server_key} {command} &"
         os.system(cmd)
+
+    if command == 'STOP' :
+        cmd = f"python dispatcher_command.py {redishost} server_stop {server_key} 1 &"
+        os.system(cmd)
+    if command == 'RESTART':
+        cmd = f"python dispatcher_command.py {redishost} server_restart {server_key} 1 &"
+        os.system(cmd)
+
+    if command == 'QUIT':
+        cmd = f"python dispatcher_command.py {redishost} server_quit {server_key} 1 &"
+        os.system(cmd)
+
 
     print(f"Running shell command: {cmd} ")
     logging.warning(f"Running shell command: {cmd} ")
