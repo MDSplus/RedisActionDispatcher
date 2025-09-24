@@ -132,11 +132,11 @@ def handleExecuteXXXX(treeName, shot, actionPath, timeout, red, ident, serverId,
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
-def execute(treeName, shot, actionPath, tid):
-    originalStdoutFd = os.dup(1)  # duplicate fd 1
-    outFd = open(str(tid)+'Log.out',  'a')
-    os.dup2(outFd.fileno(), 1)
-
+def execute(treeName, shot, actionPath, tid, isSequential):
+    if isSequential:
+        originalStdoutFd = os.dup(1)  # duplicate fd 1
+        outFd = open(str(tid)+'Log.out',  'w')
+        os.dup2(outFd.fileno(), 1)
     try:
         tree = MDSplus.Tree(treeName, shot)
         node = tree.getNode(actionPath)
@@ -163,22 +163,29 @@ def execute(treeName, shot, actionPath, tid):
     except Exception as exc:
             status = 'Failure'
             traceback.print_exc(exc)
+  
+    if isSequential:
+        outFd.flush()
+        os.fsync(outFd)
+        outFd.close()
+        os.dup2(originalStdoutFd, 1)
+
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
     print(date + ' Done '+ actionPath)
     statusFile = open(str(tid) + 'Status.out', 'w')
     statusFile.write(status)
     statusFile.flush()
     statusFile.close()
-    #os.fsync(outFd)
-    outFd.flush()
-    outFd.close()
 
-    os.dup2(originalStdoutFd, 1)
 
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex):
-        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, ))
         if mutex != None:
+            isSequential = True
+        else:
+            isSequential = False
+        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
+        if isSequential:
             mutex.acquire()
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
@@ -196,20 +203,23 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
                     red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
-        if mutex != None:
-            mutex.release()
 #Cannot terminate a thread......      
 #        if t.isAlive(): #not yet terminated
 #            p.terminate()
 
 
-        logFile = open(str(tid) + 'Log.out', 'r')
-        log = logFile.read()
-        logFile.close()
-        os.system('rm '+str(tid) + 'Log.out')
-        print("LOG:")
-        print(log)
-        print("*****")
+        if isSequential:
+          logFile = open(str(tid) + 'Log.out', 'r')
+          log = logFile.read()
+          logFile.close()
+          os.system('rm '+str(tid) + 'Log.out')
+        else:
+          log = ''
+        if isSequential:
+            mutex.release()
+            print("LOG:")
+            print(log)
+            print("*****")
         try:
             statusFile =  open(str(tid) + 'Status.out', 'r')
             status = statusFile.read()
@@ -355,7 +365,7 @@ class ActionServer:
                     continue
                 if items[1] == self.serverId:
                     print('Server exit')
-                    self.red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
+                    self.red.hset('ACTION_SERVER_ACTIVE:'+self.ident, self.serverId, 'OFF')
                     os._exit(0)
                     #sys.exit(0)
             elif msg.upper()[:9] == 'HEARTBEAT':
