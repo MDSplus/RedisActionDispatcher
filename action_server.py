@@ -15,6 +15,7 @@ import atexit
 import socket
 import threading 
 from datetime import datetime
+import argparse
 
 lastTree = ''
 lastShot = 0
@@ -56,7 +57,7 @@ def executeXXXX(treeName, shot, actionPath):
                 status = 'Success'
             elif status % 2 != 0:
                 status = 'Success'
-	    else:
+            else:
                 status = 'Failure'
         else:
             status = int(task.data())
@@ -151,7 +152,7 @@ def execute(treeName, shot, actionPath, tid):
                 status = 'Success'
             elif status % 2 != 0:
                 status = 'Success'
-	    else:
+            else:
                 status = 'Failure'
         else:
             status = int(task.data())
@@ -177,7 +178,8 @@ def execute(treeName, shot, actionPath, tid):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, ))
-        mutex.acquire()
+        if mutex != None:
+            mutex.acquire()
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
@@ -194,7 +196,8 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
                     red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
-        mutex.release()
+        if mutex != None:
+            mutex.release()
 #Cannot terminate a thread......      
 #        if t.isAlive(): #not yet terminated
 #            p.terminate()
@@ -304,10 +307,13 @@ class ActionServer:
             worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, mutex, notifyDone)
             worker.spawn()
 
-    def handleCommands(self):
+    def handleCommands(self, sequential):
         if self.stopped:
             return
-        mutex = threading.Lock()
+        if sequential:
+            mutex = None
+        else:
+            mutex = threading.Lock()
         self.handleDo(mutex)
         while True:
             message = self.updPubsub.get_message(timeout=100)
@@ -370,27 +376,33 @@ def reportServerOn(red, ident, id):
         red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
         time.sleep(1)
 
+def main(serverClass, serverId, redisServer, sequential):
+    red = redis.Redis(host=redisServer)
+    ident = serverClass
+    id = serverId
+    print('Action server started. Server class: '+ident+', Server Id: '+id)
+    act = ActionServer(ident, id, red)
+    #atexit.register(reportExit, red, ident, id)
+    #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
+    thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
+    thread.start()
+    act.handleCommands(sequential)
+    
 
 
-if len(sys.argv) != 3 and len(sys.argv) != 4:
-    print('usage: python action_server.py <server class> <server id> [redis server]')
-    sys.exit(0)
-if len(sys.argv) == 3:
-    red = redis.Redis(host='localhost')
-else:
-    red = redis.Redis(host=sys.argv[3])
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    
+    # positional argument
+    parser.add_argument("serverClass", help="Server Class")
+    parser.add_argument("serverId", help="ServerId")
+    parser.add_argument("redisServer", help="REDIS server")
+    parser.add_argument("--sequential", type=bool, default=False, help="Asynchronous execution")
+    args = parser.parse_args()
+    print(args.serverClass, args.serverId, args.redisServer, args.sequential)
+    main(args.serverClass, args.serverId, args.redisServer, args.sequential)
 
-ident = sys.argv[1]
-id = sys.argv[2]
-print('Action server started. Server class: '+ident+', Server Id: '+id)
-act = ActionServer(ident, id, red)
-#atexit.register(reportExit, red, ident, id)
-#red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
-thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
-thread.start()
 
-act.handleCommands()
-   
 
 
 
