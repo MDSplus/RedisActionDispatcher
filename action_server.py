@@ -355,7 +355,7 @@ class ActionServer:
                     continue
                 if items[1] == self.serverId:
                     print('Server exit')
-                    red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
+                    self.red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
                     os._exit(0)
                     #sys.exit(0)
             elif msg.upper()[:9] == 'HEARTBEAT':
