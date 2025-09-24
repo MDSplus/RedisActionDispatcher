@@ -186,7 +186,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             isSequential = False
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
         if isSequential:
-            mutex.acquire()
+            mutex.acquire()   #Not necessary now but maintained nevertheless
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
@@ -271,10 +271,11 @@ class WorkerAction:
         tid = threading.current_thread().ident + lastId
         lastId = lastId + 1
         self.red.hset('ABORT_REQUESTS:'+self.ident, self.actionPath, '0')
-        p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.mutex))
-        p.start()
-#serialize operations carried out by this server in order not to mix outputs
-	#handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, mutex)
+        if self.mutex == None:  #Parallel
+            p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.mutex))
+            p.start()
+        else: #Sequential
+            handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.mutex)
 
 
 class ActionServer:
