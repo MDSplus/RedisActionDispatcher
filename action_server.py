@@ -311,9 +311,9 @@ class ActionServer:
         if self.stopped:
             return
         if sequential:
-            mutex = None
-        else:
             mutex = threading.Lock()
+        else:
+            mutex = None
         self.handleDo(mutex)
         while True:
             message = self.updPubsub.get_message(timeout=100)
@@ -386,7 +386,7 @@ def main(serverClass, serverId, redisServer, sequential):
     #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
     thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
     thread.start()
-    act.handleCommands(sequential)
+    act.handleCommands(sequential != 0)
     
 
 
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     parser.add_argument("serverClass", help="Server Class")
     parser.add_argument("serverId", help="ServerId")
     parser.add_argument("redisServer", help="REDIS server")
-    parser.add_argument("--sequential", type=bool, default=False, help="Asynchronous execution")
+    parser.add_argument("--sequential", type=int, default=1, help="Force Mutual exclusion for log consistency")
     args = parser.parse_args()
     print(args.serverClass, args.serverId, args.redisServer, args.sequential)
     main(args.serverClass, args.serverId, args.redisServer, args.sequential)
