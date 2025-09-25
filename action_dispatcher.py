@@ -410,6 +410,8 @@ class ActionDispatcher:
             self.red.hset('ACTION_STATUS:'+treeName+':'+str(shot), parts[3], parts[4]) 
             if len(parts) >= 4:
                 self.red.hset('ACTION_LOG:'+treeName+':'+str(shot), parts[3], msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
+##for debug
+                print(msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
 
 #handle sequence
 
@@ -511,7 +513,8 @@ class ActionDispatcher:
         wasAlive = {}
         heartbeats = {}
         while True:
-            idents = self.identList.copy()
+            idents = self.identList[:]
+            #idents = self.identList.copy()
             for ident in idents:
                 ids = self.getServerIds(ident)
                 if len(ids) == 0:
