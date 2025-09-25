@@ -96,6 +96,7 @@ def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, server
             if p.exitcode != None:
                 break
             else:
+                printf('ECCO IL TIMEOUT!!!!!  ', actionPath)
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
                     red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
@@ -133,10 +134,6 @@ def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, server
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
 def execute(treeName, shot, actionPath, tid, isSequential):
-    if isSequential:
-        originalStdoutFd = os.dup(1)  # duplicate fd 1
-        outFd = open(str(tid)+'Log.out',  'w')
-        os.dup2(outFd.fileno(), 1)
     try:
         tree = MDSplus.Tree(treeName, shot)
         node = tree.getNode(actionPath)
@@ -162,13 +159,11 @@ def execute(treeName, shot, actionPath, tid, isSequential):
                 status = 'Failure'
     except Exception as exc:
             status = 'Failure'
-            traceback.print_exc(exc)
+            try:
+                traceback.print_exc(exc)
+            except:
+                pass
   
-    if isSequential:
-        outFd.flush()
-        os.fsync(outFd)
-        outFd.close()
-        os.dup2(originalStdoutFd, 1)
 
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
     print(date + ' Done '+ actionPath)
@@ -186,6 +181,11 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
         if isSequential:
             mutex.acquire()
+        if isSequential:
+            originalStdoutFd = os.dup(1)  # duplicate fd 1
+            outFd = open(str(tid)+'Log.out',  'w')
+            os.dup2(outFd.fileno(), 1)
+
         t.start()
         if timeout == 0:
             timeoutSecs = 1000000
@@ -202,6 +202,11 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 #Cannot terminate a thread......      
 #        if t.isAlive(): #not yet terminated
 #            p.terminate()
+        if isSequential:
+            outFd.flush()
+            os.fsync(outFd)
+            outFd.close()
+            os.dup2(originalStdoutFd, 1)
 
 
         if isSequential:
@@ -341,7 +346,7 @@ class ActionServer:
             if not 'data' in message.keys() or not isinstance(message['data'], bytes):
                 continue
             msg = message['data'].decode('utf8')
-            print(msg)
+#            print(msg)
             if len(msg) == 2 and msg.upper() == 'DO':
                 self.handleDo(isSequential, isProcess, mutex)
             elif len(msg) > 5 and msg[:5].upper() == 'ABORT':
