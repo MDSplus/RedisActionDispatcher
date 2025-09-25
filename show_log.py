@@ -8,10 +8,10 @@ import MDSplus
 if len(sys.argv) != 5 and len(sys.argv) != 6:
     print('usage: python show_log.py <tree> <shot>  <action full path> [redis server]')
     sys.exit(0)
-if len(sys.argv) == 5:
+if len(sys.argv) == 4:
     red = redis.Redis(host='localhost')
 else:
-    red = redis.Redis(host=sys.argv[5])
+    red = redis.Redis(host=sys.argv[4])
 
 treeName = sys.argv[1].upper()
 shotStr = sys.argv[2]
