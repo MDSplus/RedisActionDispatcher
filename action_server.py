@@ -18,7 +18,7 @@ from datetime import datetime
 import argparse
 
 lastTree = ''
-lastShot = 0
+lastShot = '0'
 
 lastId = 0
 
