@@ -226,7 +226,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             status = 'Aborted'
 
 
-        if sequential:
+        if isSequential:
             mutex.release()
 
         red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
