@@ -18,7 +18,7 @@ from datetime import datetime
 import argparse
 
 lastTree = ''
-lastShot = 0
+lastShot = '0'
 
 lastId = 0
 
@@ -179,11 +179,13 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 
 
 
-def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential):
-        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
+def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential, mutex):
+        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential,))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
+        if isSequential:
+            mutex.acquire()
         t.start()
         if timeout == 0:
             timeoutSecs = 1000000
@@ -207,6 +209,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
           log = logFile.read()
           logFile.close()
           os.system('rm '+str(tid) + 'Log.out')
+          mutex.release()
         else:
           log = ''
         if isSequential:
@@ -239,7 +242,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
 
 class WorkerAction:
-    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, isSequential, isProcess, notifyDone = True):
+    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, isSequential, isProcess, mutex, notifyDone = True):
         self.treeName = treeName
         self.shot = shot
         self.actionPath = actionPath
@@ -259,6 +262,7 @@ class WorkerAction:
         self.notifyDone = notifyDone
         self.isSequential = isSequential
         self.isProcess = isProcess
+        self.mutex = mutex
     
     def spawn(self):
         global lastId
@@ -267,15 +271,17 @@ class WorkerAction:
         self.red.hset('ABORT_REQUESTS:'+self.ident, self.actionPath, '0')
         if not self.isSequential:  #Parallel
             if self.isProcess:
-                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid))
+                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, ))
             else:
-               p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential))
+               p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex))
             p.start()
         else: #Sequential
             if self.isProcess:
-                handleExecuteProcess(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid)
+                handleExecuteProcess(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone)
             else:
-                handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential)
+                p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex))
+                p.start()  
+#              handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex)
 
 
 class ActionServer:
@@ -296,7 +302,7 @@ class ActionServer:
         red.hset('ACTION_SERVER_IP:'+self.ident, self.serverId, ip)
 
 
-    def handleDo(self, isSequential, isProcess):
+    def handleDo(self, isSequential, isProcess, mutex):
         global lastTree, lastShot
         while True:
             toDoMsg = self.red.lpop('ACTION_SERVER_TODO:'+self.ident)
@@ -315,13 +321,16 @@ class ActionServer:
             lastShot = items[1]
             self.red.hincrby('ACTION_SERVER_DOING:'+self.ident, self.serverId, 1)
             
-            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, isSequential, isProcess, notifyDone)
+            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, isSequential, isProcess, mutex, notifyDone)
             worker.spawn()
 
     def handleCommands(self, isSequential, isProcess):
+        global lastTree, lastShot
         if self.stopped:
             return
-        self.handleDo(isSequential, isProcess)
+        mutex = threading.Lock()
+
+        self.handleDo(isSequential, isProcess, mutex)
         while True:
             message = self.updPubsub.get_message(timeout=100)
             if message == None:
@@ -329,8 +338,9 @@ class ActionServer:
             if not 'data' in message.keys() or not isinstance(message['data'], bytes):
                 continue
             msg = message['data'].decode('utf8')
+            print(msg)
             if len(msg) == 2 and msg.upper() == 'DO':
-                self.handleDo(isSequential, isProcess)
+                self.handleDo(isSequential, isProcess, mutex)
             elif len(msg) > 5 and msg[:5].upper() == 'ABORT':
                 items = msg.split('+')
                 if len(items) != 2:
@@ -338,6 +348,7 @@ class ActionServer:
                 else:
                     self.red.hset('ABORT_REQUESTS:'+self.ident, items[1], '1')
             elif msg.upper()[:7] == 'RESTART':
+                print('RESTART')
                 items = msg.split('+')
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
@@ -345,7 +356,7 @@ class ActionServer:
                 if items[1] == self.serverId:
                     actionPaths = self.red.hkeys('ACTION_INFO:'+lastTree+':'+lastShot+':'+self.ident)
                     for actionPath in actionPaths:
-                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath).decode('utf-8') == ('DOING '+str(self.serverId)):
+                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath).decode('utf-8') == ('DOING'):
                             self.red.hset('ABORT_REQUESTS:'+self.ident, actionPath, '1')
                     self.stopped = False
             elif msg.upper()[:4] == 'STOP': 
