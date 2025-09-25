@@ -179,7 +179,7 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 
 
 
-def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex, isSequential):
+def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
         if isSequential:
             mutex.acquire()   #Not necessary now but maintained nevertheless
