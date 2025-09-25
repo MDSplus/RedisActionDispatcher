@@ -325,6 +325,7 @@ class ActionServer:
             worker.spawn()
 
     def handleCommands(self, isSequential, isProcess):
+        global lastTree, lastShot
         if self.stopped:
             return
         mutex = threading.Lock()
