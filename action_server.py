@@ -179,7 +179,7 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 
 
 
-def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential):
+def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential, mutex):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential, mutex))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
