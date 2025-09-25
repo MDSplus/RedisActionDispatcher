@@ -209,7 +209,6 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
           log = logFile.read()
           logFile.close()
           os.system('rm '+str(tid) + 'Log.out')
-          mutex.release()
         else:
           log = ''
         if isSequential:
@@ -225,6 +224,10 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
                 status = 'Unknown Error'
         except:
             status = 'Aborted'
+
+
+        if sequential:
+            mutex.release()
 
         red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
         if notifyDone:
