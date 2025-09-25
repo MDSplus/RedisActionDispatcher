@@ -135,7 +135,7 @@ def server_list():
     return channels
 
 @app.route("/showlastlog")
-def ShowNodeLog():
+def ShowLastLog():
     try:
         with open("show.last.log", "r", encoding="utf-8") as f:
             message = f.read().strip().replace("\n","\\n")
@@ -144,25 +144,7 @@ def ShowNodeLog():
     except Exception as e:
         message = f"Error reading log: {e}"
 
-    return render_template_string("""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Main Page</title>
-            <script>
-                function showWarning() {
-                    // open new window 800x600
-                    let logWindow = window.open("", "LogWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
-                    logWindow.document.write("<pre>{{ message }}</pre>");
-                }
-            </script>
-        </head>
-        <body>
-            <h1>Main Page</h1>
-            <button onclick="showWarning()">Show Log Message</button>
-        </body>
-        </html>
-    """, message=message)
+    return jsonify(message)
 
 
 
@@ -374,6 +356,16 @@ TEMPLATE = """
     
 
 <script>
+     async function showWarning() {
+          // call Flask endpoint
+          let response = await fetch("/showlastlog");
+          let data = await response.json();
+
+          // open new window
+          let logWindow = window.open("", "LogWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
+          logWindow.document.write("<pre>" + data.message + "</pre>");
+     }
+
     function showTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
@@ -478,7 +470,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS')">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
                 </td>`;
             tbody_active.appendChild(row_active);
         });
@@ -541,7 +533,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS')">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -893,7 +885,7 @@ def handle_actioncommand():
         cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
         os.system(cmd1)
         os.system(cmd2)
-        ShowNodeLog()
+        ShowLastLog()
 
 
     # Example: Print or log the received command
