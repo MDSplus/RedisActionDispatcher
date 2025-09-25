@@ -280,7 +280,7 @@ class WorkerAction:
                 handleExecuteProcess(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone)
             else:
                 p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex))
-  
+                p.start()  
 #              handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex)
 
 
