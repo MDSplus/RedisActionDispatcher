@@ -205,11 +205,11 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
 
         if isSequential:
-          mutex.release()
           logFile = open(str(tid) + 'Log.out', 'r')
           log = logFile.read()
           logFile.close()
           os.system('rm '+str(tid) + 'Log.out')
+          mutex.release()
         else:
           log = ''
         if isSequential:
@@ -280,7 +280,6 @@ class WorkerAction:
                 handleExecuteProcess(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone)
             else:
                 p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex))
-                p.start()              
   
 #              handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential, self.mutex)
 
