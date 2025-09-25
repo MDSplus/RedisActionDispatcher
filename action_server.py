@@ -37,7 +37,7 @@ def makeASCII(txt):
             outTxt += char
     return outTxt
 
-def executeXXXX(treeName, shot, actionPath):
+def executeProcess(treeName, shot, actionPath):
     signal.signal(signal.SIGTERM, closeStdout)
     outFd = open(str(os.getpid())+'Log.out',  'a')
     os.dup2(outFd.fileno(), 1)
@@ -79,8 +79,8 @@ def executeXXXX(treeName, shot, actionPath):
     outFd.flush()
     outFd.close()
 
-def handleExecuteXXXX(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
-        p = Process(target=execute, args = (treeName, shot, actionPath, ))
+def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
+        p = Process(target=executeProcess, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
@@ -132,11 +132,11 @@ def handleExecuteXXXX(treeName, shot, actionPath, timeout, red, ident, serverId,
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
-def execute(treeName, shot, actionPath, tid):
-    originalStdoutFd = os.dup(1)  # duplicate fd 1
-    outFd = open(str(tid)+'Log.out',  'a')
-    os.dup2(outFd.fileno(), 1)
-
+def execute(treeName, shot, actionPath, tid, isSequential):
+    if isSequential:
+        originalStdoutFd = os.dup(1)  # duplicate fd 1
+        outFd = open(str(tid)+'Log.out',  'w')
+        os.dup2(outFd.fileno(), 1)
     try:
         tree = MDSplus.Tree(treeName, shot)
         node = tree.getNode(actionPath)
@@ -163,23 +163,26 @@ def execute(treeName, shot, actionPath, tid):
     except Exception as exc:
             status = 'Failure'
             traceback.print_exc(exc)
+  
+    if isSequential:
+        outFd.flush()
+        os.fsync(outFd)
+        outFd.close()
+        os.dup2(originalStdoutFd, 1)
+
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
     print(date + ' Done '+ actionPath)
     statusFile = open(str(tid) + 'Status.out', 'w')
     statusFile.write(status)
     statusFile.flush()
     statusFile.close()
-    #os.fsync(outFd)
-    outFd.flush()
-    outFd.close()
-
-    os.dup2(originalStdoutFd, 1)
 
 
-def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex):
-        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, ))
-        if mutex != None:
-            mutex.acquire()
+
+def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, mutex, isSequential):
+        t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
+        if isSequential:
+            mutex.acquire()   #Not necessary now but maintained nevertheless
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
@@ -196,20 +199,23 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
                     red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
-        if mutex != None:
-            mutex.release()
 #Cannot terminate a thread......      
 #        if t.isAlive(): #not yet terminated
 #            p.terminate()
 
 
-        logFile = open(str(tid) + 'Log.out', 'r')
-        log = logFile.read()
-        logFile.close()
-        os.system('rm '+str(tid) + 'Log.out')
-        print("LOG:")
-        print(log)
-        print("*****")
+        if isSequential:
+          logFile = open(str(tid) + 'Log.out', 'r')
+          log = logFile.read()
+          logFile.close()
+          os.system('rm '+str(tid) + 'Log.out')
+        else:
+          log = ''
+        if isSequential:
+            mutex.release()
+            print("LOG:")
+            print(log)
+            print("*****")
         try:
             statusFile =  open(str(tid) + 'Status.out', 'r')
             status = statusFile.read()
@@ -236,7 +242,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
 
 class WorkerAction:
-    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, mutex, notifyDone = True):
+    def __init__(self, treeName, shot, actionPath, actionNid, timeout,  ident, serverId, red, isSequential, isProcess, notifyDone = True):
         self.treeName = treeName
         self.shot = shot
         self.actionPath = actionPath
@@ -254,17 +260,25 @@ class WorkerAction:
         self.ident = ident
         self.serverId = serverId
         self.notifyDone = notifyDone
-        self.mutex = mutex
+        self.isSequential = isSequential
+        self.isProcess = isProcess
     
     def spawn(self):
         global lastId
         tid = threading.current_thread().ident + lastId
         lastId = lastId + 1
         self.red.hset('ABORT_REQUESTS:'+self.ident, self.actionPath, '0')
-        p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.mutex))
-        p.start()
-#serialize operations carried out by this server in order not to mix outputs
-	#handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, mutex)
+        if not self.isSequential:  #Parallel
+            if self.isProcess:
+                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid))
+            else:
+               p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential))
+            p.start()
+        else: #Sequential
+            if self.isProcess:
+                handleExecuteProcess(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid)
+            else:
+                handleExecute(self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential)
 
 
 class ActionServer:
@@ -285,7 +299,7 @@ class ActionServer:
         red.hset('ACTION_SERVER_IP:'+self.ident, self.serverId, ip)
 
 
-    def handleDo(self, mutex):
+    def handleDo(self, isSequential, isProcess):
         global lastTree, lastShot
         while True:
             toDoMsg = self.red.lpop('ACTION_SERVER_TODO:'+self.ident)
@@ -304,17 +318,13 @@ class ActionServer:
             lastShot = items[1]
             self.red.hincrby('ACTION_SERVER_DOING:'+self.ident, self.serverId, 1)
             
-            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, mutex, notifyDone)
+            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, isSequential, isProcess, notifyDone)
             worker.spawn()
 
-    def handleCommands(self, sequential):
+    def handleCommands(self, isSequential, isProcess):
         if self.stopped:
             return
-        if sequential:
-            mutex = threading.Lock()
-        else:
-            mutex = None
-        self.handleDo(mutex)
+        self.handleDo(isSequential, isProcess)
         while True:
             message = self.updPubsub.get_message(timeout=100)
             if message == None:
@@ -323,7 +333,7 @@ class ActionServer:
                 continue
             msg = message['data'].decode('utf8')
             if len(msg) == 2 and msg.upper() == 'DO':
-                self.handleDo(mutex)
+                self.handleDo(isSequential, isProcess)
             elif len(msg) > 5 and msg[:5].upper() == 'ABORT':
                 items = msg.split('+')
                 if len(items) != 2:
@@ -355,7 +365,7 @@ class ActionServer:
                     continue
                 if items[1] == self.serverId:
                     print('Server exit')
-                    red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'OFF')
+                    self.red.hset('ACTION_SERVER_ACTIVE:'+self.ident, self.serverId, 'OFF')
                     os._exit(0)
                     #sys.exit(0)
             elif msg.upper()[:9] == 'HEARTBEAT':
@@ -376,7 +386,7 @@ def reportServerOn(red, ident, id):
         red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
         time.sleep(1)
 
-def main(serverClass, serverId, redisServer, sequential):
+def main(serverClass, serverId, redisServer, sequential, process):
     red = redis.Redis(host=redisServer)
     ident = serverClass
     id = serverId
@@ -386,7 +396,7 @@ def main(serverClass, serverId, redisServer, sequential):
     #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
     thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
     thread.start()
-    act.handleCommands(sequential != 0)
+    act.handleCommands(sequential != 0, process != 0)
     
 
 
@@ -398,9 +408,10 @@ if __name__ == "__main__":
     parser.add_argument("serverId", help="ServerId")
     parser.add_argument("redisServer", help="REDIS server")
     parser.add_argument("--sequential", type=int, default=1, help="Force Mutual exclusion for log consistency")
+    parser.add_argument("--process", type=int, default=0, help="Force Mutual exclusion for log consistency")
     args = parser.parse_args()
-    print(args.serverClass, args.serverId, args.redisServer, args.sequential)
-    main(args.serverClass, args.serverId, args.redisServer, args.sequential)
+    print(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
+    main(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
 
 
 
