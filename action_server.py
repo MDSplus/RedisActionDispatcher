@@ -181,8 +181,6 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential))
-        if isSequential:
-            mutex.acquire()   #Not necessary now but maintained nevertheless
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
@@ -212,7 +210,6 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         else:
           log = ''
         if isSequential:
-            mutex.release()
             print("LOG:")
             print(log)
             print("*****")
