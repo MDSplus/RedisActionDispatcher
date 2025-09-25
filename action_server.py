@@ -267,7 +267,7 @@ class WorkerAction:
         self.red.hset('ABORT_REQUESTS:'+self.ident, self.actionPath, '0')
         if not self.isSequential:  #Parallel
             if self.isProcess:
-                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, )
+                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, ))
             else:
                p = threading.Thread(target=handleExecute, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, tid, self.isSequential))
             p.start()
