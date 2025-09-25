@@ -138,7 +138,7 @@ def server_list():
 def ShowLastLog():
     try:
         with open("show.last.log", "r", encoding="utf-8") as f:
-            message = f.read().strip().replace("\n","\\n")
+            message = f.read().strip()
     except FileNotFoundError:
         message = "⚠️ No log file found."
     except Exception as e:
@@ -356,15 +356,18 @@ TEMPLATE = """
     
 
 <script>
-     async function showWarning() {
-          // call Flask endpoint
-          let response = await fetch("/showlastlog");
-          let data = await response.json();
 
-          // open new window
-          let logWindow = window.open("", "LogWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
-          logWindow.document.write("<pre>" + data.message + "</pre>");
-     }
+        async function showWarning() {
+          try {
+            let response = await fetch("/showlastlog");
+            let log_data = await response.json();   // <-- parse JSON
+
+            let logWindow = window.open("", "LogWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
+            logWindow.document.write("<pre>" + log_data + "</pre>");
+          } catch (err) {
+            console.error("Fetch error:", err);
+          }
+        }
 
     function showTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -885,7 +888,8 @@ def handle_actioncommand():
         cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
         os.system(cmd1)
         os.system(cmd2)
-        ShowLastLog()
+        #time.sleep(1)
+
 
 
     # Example: Print or log the received command
