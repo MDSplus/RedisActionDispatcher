@@ -338,6 +338,7 @@ class ActionServer:
             if not 'data' in message.keys() or not isinstance(message['data'], bytes):
                 continue
             msg = message['data'].decode('utf8')
+            print(msg)
             if len(msg) == 2 and msg.upper() == 'DO':
                 self.handleDo(isSequential, isProcess, mutex)
             elif len(msg) > 5 and msg[:5].upper() == 'ABORT':
@@ -347,6 +348,7 @@ class ActionServer:
                 else:
                     self.red.hset('ABORT_REQUESTS:'+self.ident, items[1], '1')
             elif msg.upper()[:7] == 'RESTART':
+                print('RESTART')
                 items = msg.split('+')
                 if len(items) != 2:
                     print('Internal error. Wrong command message: '+msg)
@@ -354,7 +356,7 @@ class ActionServer:
                 if items[1] == self.serverId:
                     actionPaths = self.red.hkeys('ACTION_INFO:'+lastTree+':'+lastShot+':'+self.ident)
                     for actionPath in actionPaths:
-                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath).decode('utf-8') == ('DOING '+str(self.serverId)):
+                        if self.red.hget('ACTION_INFO:'+lastTree+':'+ lastShot+':'+self.ident, actionPath).decode('utf-8') == ('DOING'):
                             self.red.hset('ABORT_REQUESTS:'+self.ident, actionPath, '1')
                     self.stopped = False
             elif msg.upper()[:4] == 'STOP': 
