@@ -412,7 +412,7 @@ class ActionDispatcher:
             if len(parts) >= 4:
                 self.red.hset('ACTION_LOG:'+treeName+':'+str(shot), parts[3], msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
 ##for debug
-                print(msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
+#                print(msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
 
 #handle sequence
 
