@@ -11,7 +11,7 @@ import json
 
 
 LOG_FILE = "redis_pubsub.log"
-redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var
+redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var - default is "localhost"
 print(f"Redis host set to: {redishost}")
 
 app = Flask(__name__)
@@ -133,6 +133,20 @@ def server_list():
     # print(channels)
 
     return channels
+
+@app.route("/showlastlog")
+def ShowLastLog():
+    try:
+        with open("show.last.log", "r", encoding="utf-8") as f:
+            message = f.read().strip()
+    except FileNotFoundError:
+        message = "⚠️ No log file found."
+    except Exception as e:
+        message = f"Error reading log: {e}"
+
+    return jsonify(message)
+
+
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -342,6 +356,19 @@ TEMPLATE = """
     
 
 <script>
+
+        async function showWarning() {
+          try {
+            let response = await fetch("/showlastlog");
+            let log_data = await response.json();   // <-- parse JSON
+
+            let logWindow = window.open("", "LogWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
+            logWindow.document.write("<pre>" + log_data + "</pre>");
+          } catch (err) {
+            console.error("Fetch error:", err);
+          }
+        }
+
     function showTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
@@ -369,9 +396,11 @@ TEMPLATE = """
                     <button onclick="sendCommand('${item.key}', 'START')">Start Server</button>
                     <button onclick="sendCommand('${item.key}', 'QUIT')">Quit Server</button>
                     <button onclick="sendCommand('${item.key}', 'RESTART')">Restart Server</button>
+                    <button onclick="sendCommand('${item.key}', 'KILL')">Kill Server</button>
+<!--
                     <button onclick="sendCommand('${item.key}', 'STOP')">Stop Actions</button>
                     <button onclick="sendCommand('${item.key}', 'SERVER_LOG')">Server Log</button>
-
+-->
                 </td>`;
             tbody.appendChild(row);
         });
@@ -444,7 +473,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS')">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
                 </td>`;
             tbody_active.appendChild(row_active);
         });
@@ -507,7 +536,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS')">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -815,6 +844,9 @@ def handle_command():
         cmd = f"python dispatcher_command.py {redishost} server_quit {server_key} 1 &"
         os.system(cmd)
 
+    if command == 'KILL':
+        cmd = f"server_command.sh {server_key} {command} &"
+        os.system(cmd)
 
     print(f"Running shell command: {cmd} ")
     logging.warning(f"Running shell command: {cmd} ")
@@ -851,7 +883,12 @@ def handle_actioncommand():
         client.publish(f"ACTION_SERVER_PUBSUB:{server}", "DO")
 
     if command == "LOGS":
-        print(f"TO BE IMPLEMENTED: {server} {key} {command}")
+        #print(f"TO BE IMPLEMENTED: {server} {key} {command}")
+        cmd1 = f"echo SHOW LOG: {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
+        cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
+        os.system(cmd1)
+        os.system(cmd2)
+        #time.sleep(1)
 
 
 

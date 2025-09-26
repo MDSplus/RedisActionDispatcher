@@ -265,7 +265,8 @@ class ActionDispatcher:
                 while self.currSeqNumbers[ident] <= self.endSeqNumber and not self.currSeqNumbers[ident] in self.seqActions[treeShot][phase][ident].keys():
                     self.currSeqNumbers[ident] += 1 
                 if self.currSeqNumbers[ident] <= self.endSeqNumber:
-                    self.allSeqTerminated = False
+                    if serverExists:
+                        self.allSeqTerminated = False
                     for actNid in self.seqActions[treeShot][phase][ident][self.currSeqNumbers[ident]]:
                         fullPath = tree.getNode(actNid).getFullPath()
                         if serverExists:
@@ -465,11 +466,11 @@ class ActionDispatcher:
             fullPath = tree.getNode(actionNid).getFullPath()
             statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
             if statusInfo == None:
-                print('Internal error: Missing Action Info for '+fullPath)
+                print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
                 break
             statusInfos = statusInfo.decode('utf-8').split()
-#            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == str(id)):
-            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
+#            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
+            if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
                 print('Removing action due to server crash: ', fullPath)
                 self.pendingSeqActions[ident].remove(actionNid)
                 self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
@@ -488,8 +489,8 @@ class ActionDispatcher:
                 print('Internal error: Missing Action Info for '+fullPath)
                 break
             statusInfos = statusInfo.decode('utf-8').split()
-#            if statusInfos[0] == 'DOING' and statusInfo[1] == str(id):
-            if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
+            #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
+            if statusInfos[0] == 'DOING':
                 print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
                 self.pendingDepActions[ident].remove(actionNid)
                 self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
@@ -514,7 +515,6 @@ class ActionDispatcher:
         heartbeats = {}
         while True:
             idents = self.identList[:]
-            #idents = self.identList.copy()
             for ident in idents:
                 ids = self.getServerIds(ident)
                 if len(ids) == 0:
