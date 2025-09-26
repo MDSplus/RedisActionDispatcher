@@ -188,9 +188,9 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 
         t.start()
         if timeout == 0:
-            timeoutSecs = 1000000
+            timeoutSecs = 2000000
         else:
-            timeoutSecs = int(timeout)
+            timeoutSecs = int(2*timeout)
         for i in range(timeoutSecs):
             t.join(0.5)
             if not t.isAlive():
