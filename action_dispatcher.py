@@ -457,45 +457,41 @@ class ActionDispatcher:
 #remove pending operations for a dead server
     def removeDeadPending(self, tree, ident, id):
         self.updateMutex.acquire()
-        if not ident in self.pendingSeqActions.keys(): #Outside operation
-            self.updateMutex.release()
-            return
-        for actionNid in self.pendingSeqActions[ident]:
-            fullPath = tree.getNode(actionNid).getFullPath()
-            statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
-            if statusInfo == None:
-                print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
-                break
-            statusInfos = statusInfo.decode('utf-8').split()
-#            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
-            if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
-                print('Removing action due to server crash: ', fullPath)
-                self.pendingSeqActions[ident].remove(actionNid)
-                self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
-                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                if len(self.pendingSeqActions[ident]) == 0:
-                    self.updateEvent.set()
-#same for pending dependent  actions
-        if not ident in self.pendingDepActions.keys(): #Outside operation
-            self.updateMutex.release()
-            return
-        for actionNid in self.pendingDepActions[ident]:
-            fullPath = tree.getNode(actionNid).getFullPath()
-            statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
-            if statusInfo == None:
-                print('Internal error: Missing Action Info for '+fullPath)
-                break
-            statusInfos = statusInfo.decode('utf-8').split()
-            #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
-            if statusInfos[0] == 'DOING':
-                print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
-                self.pendingDepActions[ident].remove(actionNid)
-                self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
-                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                if len(self.pendingDepActions[ident]) == 0:
-                    self.updateEvent.set()
+        if ident in self.pendingSeqActions.keys():
+            for actionNid in self.pendingSeqActions[ident]:
+                fullPath = tree.getNode(actionNid).getFullPath()
+                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                if statusInfo == None:
+                    print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
+                    break
+                statusInfos = statusInfo.decode('utf-8').split()
+    #            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
+                if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
+                    print('Removing action due to server crash: ', fullPath)
+                    self.pendingSeqActions[ident].remove(actionNid)
+                    self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
+                    if len(self.pendingSeqActions[ident]) == 0:
+                        self.updateEvent.set()
+    #same for pending dependent  actions
+        if ident in self.pendingDepActions.keys(): 
+            for actionNid in self.pendingDepActions[ident]:
+                fullPath = tree.getNode(actionNid).getFullPath()
+                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                if statusInfo == None:
+                    print('Internal error: Missing Action Info for '+fullPath)
+                    break
+                statusInfos = statusInfo.decode('utf-8').split()
+                #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
+                if statusInfos[0] == 'DOING':
+                    print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
+                    self.pendingDepActions[ident].remove(actionNid)
+                    self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
+                    if len(self.pendingDepActions[ident]) == 0:
+                        self.updateEvent.set()
         self.updateMutex.release()
 
 
