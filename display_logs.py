@@ -21,6 +21,9 @@ actionPath = sys.argv[4].upper()
 if actionPath != 'ANY':
     tree = MDSplus.Tree(treeName, int(shotStr))
     actionPath = tree.getNode(actionPath).getFullPath()
+    print(actionPath[0])
+    print(actionPath[1])
+
 print(treeName, shotStr, ident, actionPath)
 pubsub = red.pubsub()
 pubsub.subscribe('ACTION_DISPATCHER_PUBSUB')
