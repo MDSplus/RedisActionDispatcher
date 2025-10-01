@@ -147,12 +147,12 @@ class ActionDispatcher:
             if not ident in self.identList:
                 self.identList.append(ident)
             if d.isOn():
-                if idx == 0:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
-                elif idx == len(dd) - 1:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
-                else:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
+#                if idx == 0:
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
+#                elif idx == len(dd) - 1:
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
+#                else:
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
                 try:
                     try:
                         timeout = int(d.getTimeout().data())
@@ -195,12 +195,12 @@ class ActionDispatcher:
                 except Exception as e:
                     print('Error collecting action ' + d.getPath()+ ': '+str(e))
             else: #d is off
-                if idx == 0:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
-                elif idx == len(dd) - 1:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
-                else:
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
+ #               if idx == 0:
+ #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
+ #               elif idx == len(dd) - 1:
+ #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
+ #               else:
+ #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
                 self.idents[treeShot][actNid] = ident  #Record in any case the action's server
                 self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), d.getFullPath(), 'none')
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
@@ -219,7 +219,7 @@ class ActionDispatcher:
             print("Sequence already in progress")
             return
         self.doing = True
-        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
+#        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
         treeShot = tree.name+str(tree.shot)
         if not treeShot in self.seqActions.keys():
             print('Dispatch Table missing')
@@ -244,7 +244,7 @@ class ActionDispatcher:
                 return
             self.performSequenceStep(tree, phase)
         self.doing = False
-        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
+#        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
         print('DoSequence terminated')
 
     def serverExists(self, ident):
@@ -277,15 +277,15 @@ class ActionDispatcher:
                             self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DISPATCHED')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'None') 
-                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
+#                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
                         else:
                             print('SERVER MISSING for '+fullPath)
                             #self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'NotExecuted')
-                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
-                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
-                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')
+#                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
+#                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
+#                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')
 
                     if serverExists:        
                         self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
@@ -294,12 +294,13 @@ class ActionDispatcher:
             
 
     def doPhase(self, tree, phase):
+        self.red.hset('DISPATCH_INFO', 'CURR_PHASE', phase)
         self.currPhase = phase
         treeShot = tree.name+str(tree.shot)
         if not treeShot in self.seqActions.keys():
             print('Dispatch Table missing')
             return
-        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
+#        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
         try:
             seqIdents = self.seqActions[treeShot][phase].keys()
             minSeqNumber = sys.maxsize
@@ -311,9 +312,9 @@ class ActionDispatcher:
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
-            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
-            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
 
     def handleCommands(self):
@@ -339,6 +340,8 @@ class ActionDispatcher:
                 shot = int(parts[2])
                 tree = MDSplus.Tree(treeName, -1)
                 tree.createPulse(shot)
+                self.red.hset('DISPATCH_INFO', 'CURR_TREE', treeName)
+                self.red.hset('DISPATCH_INFO', 'CURR_SHOT', shot)
             elif msg.upper()[:12] == 'BUILD_TABLES':
                 parts = msg.split(':')
                 if len(parts) != 3:
@@ -453,51 +456,47 @@ class ActionDispatcher:
                         allDepTerminated = False
                 if allDepTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
-                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
 
 
 #remove pending operations for a dead server
     def removeDeadPending(self, tree, ident, id):
         self.updateMutex.acquire()
-        if not ident in self.pendingSeqActions.keys(): #Outside operation
-            self.updateMutex.release()
-            return
-        for actionNid in self.pendingSeqActions[ident]:
-            fullPath = tree.getNode(actionNid).getFullPath()
-            statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
-            if statusInfo == None:
-                print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
-                break
-            statusInfos = statusInfo.decode('utf-8').split()
-#            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
-            if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
-                print('Removing action due to server crash: ', fullPath)
-                self.pendingSeqActions[ident].remove(actionNid)
-                self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
-                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                if len(self.pendingSeqActions[ident]) == 0:
-                    self.updateEvent.set()
-#same for pending dependent  actions
-        if not ident in self.pendingDepActions.keys(): #Outside operation
-            self.updateMutex.release()
-            return
-        for actionNid in self.pendingDepActions[ident]:
-            fullPath = tree.getNode(actionNid).getFullPath()
-            statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
-            if statusInfo == None:
-                print('Internal error: Missing Action Info for '+fullPath)
-                break
-            statusInfos = statusInfo.decode('utf-8').split()
-            #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
-            if statusInfos[0] == 'DOING':
-                print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
-                self.pendingDepActions[ident].remove(actionNid)
-                self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
-                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                if len(self.pendingDepActions[ident]) == 0:
-                    self.updateEvent.set()
+        if ident in self.pendingSeqActions.keys():
+            for actionNid in self.pendingSeqActions[ident]:
+                fullPath = tree.getNode(actionNid).getFullPath()
+                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                if statusInfo == None:
+                    print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
+                    break
+                statusInfos = statusInfo.decode('utf-8').split()
+    #            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
+                if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
+                    print('Removing action due to server crash: ', fullPath)
+                    self.pendingSeqActions[ident].remove(actionNid)
+                    self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
+                    if len(self.pendingSeqActions[ident]) == 0:
+                        self.updateEvent.set()
+    #same for pending dependent  actions
+        if ident in self.pendingDepActions.keys(): 
+            for actionNid in self.pendingDepActions[ident]:
+                fullPath = tree.getNode(actionNid).getFullPath()
+                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                if statusInfo == None:
+                    print('Internal error: Missing Action Info for '+fullPath)
+                    break
+                statusInfos = statusInfo.decode('utf-8').split()
+                #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
+                if statusInfos[0] == 'DOING':
+                    print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
+                    self.pendingDepActions[ident].remove(actionNid)
+                    self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
+                    if len(self.pendingDepActions[ident]) == 0:
+                        self.updateEvent.set()
         self.updateMutex.release()
 
 
@@ -543,7 +542,7 @@ class ActionDispatcher:
                             red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                             self.removeDeadPending(self.tree, ident, id)
                             if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
-                                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DEAD+'+ self.tree.name+'+'+str(self.tree.shot)+'+'+ident+'+'+str(id))
+#                                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DEAD+'+ self.tree.name+'+'+str(self.tree.shot)+'+'+ident+'+'+str(id))
                                 print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not responding')
                             wasAlive[ident+':'+str(id)] = False
                         else:
