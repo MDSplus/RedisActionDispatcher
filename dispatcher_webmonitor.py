@@ -801,7 +801,10 @@ def get_action_data():
             data_active = [
                 item for item in filtered_data
                 if (item['tree'], item['phase']) in phase_lookup_set
+                and item['status'] != 'OFF' #Filter out OFF Actions
             ]                           
+            # Sort: first by whether status is not 'Failure' (False < True), then alphabetically by server
+            data_active.sort(key=lambda x: (x['state'] != 'Failure', x['server']))
 
             sorted_data = sorted(
                 filtered_data,
