@@ -20,6 +20,8 @@ redis_client = client
 
 lock = Lock()
 
+warning_sem = threading.Semaphore(1)
+
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Active servers
 def get_active_servers():
@@ -136,13 +138,26 @@ def server_list():
 
 @app.route("/showlastlog")
 def ShowLastLog():
-    try:
-        with open("show.last.log", "r", encoding="utf-8") as f:
-            message = f.read().strip()
-    except FileNotFoundError:
-        message = "⚠️ No log file found."
-    except Exception as e:
-        message = f"Error reading log: {e}"
+    time.sleep(1) # Even with semaphore Firefox fails to make the actions in sequence! Chrome works well without this sleep!
+    with warning_sem:
+        print("Starting ShowLastLog()")
+        file="show.last.log"
+        #while not os.path.exists(file):
+        #    time.sleep(0.1)
+            
+
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                message = f.read().strip()
+        except FileNotFoundError:
+            message = "⚠️ No log file found."
+            print(message)
+        except Exception as e:
+            message = f"Error reading log: {e}"
+            print(message)
+        
+        cmd="rm "+file
+        os.system(cmd)
 
     return jsonify(message)
 
@@ -473,7 +488,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning();">Logs</button>
                 </td>`;
             tbody_active.appendChild(row_active);
         });
@@ -536,7 +551,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS').then(() => showWarning())">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -573,14 +588,14 @@ TEMPLATE = """
 
 
     function sendActionCommand(tree, shot, server, key, command) {
-        fetch('/server_actioncommand', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tree: tree, shot: shot, server: server, key: key, command: command })
-        })
-        .then(response => response.json())
-        .then(data => console.log(data.message))
-        .catch(error => console.error('Error sending command:', error));
+		fetch('/server_actioncommand', {
+		    method: 'POST',
+		    headers: { 'Content-Type': 'application/json' },
+		    body: JSON.stringify({ tree: tree, shot: shot, server: server, key: key, command: command })
+		})
+		.then(response => response.json())
+		.then(data => console.log(data.message))
+		.catch(error => console.error('Error sending command:', error));
     }
 
     document.getElementById("commandForm").addEventListener("submit", function(e) {
@@ -864,34 +879,39 @@ def handle_command():
 
 @app.route('/server_actioncommand', methods=['POST'])
 def handle_actioncommand():
-    setup_logger()
+    with warning_sem:
+        setup_logger()
 
-    data = request.json
-    tree = data.get('tree')
-    shot = data.get('shot')
-    server = data.get('server')
-    key = data.get('key')
-    command = data.get('command')
+        data = request.json
+        tree = data.get('tree')
+        shot = data.get('shot')
+        server = data.get('server')
+        key = data.get('key')
+        command = data.get('command')
 
-    
-    if command == "ABORT":
-        print(f"publish: ACTION_SERVER_PUBSUB:{server} , ABORT+\{key}")
-        client.publish(f"ACTION_SERVER_PUBSUB:{server}", f"ABORT+\{key}")
-
-    if command == "DISPATCH":
-        print(f"lpush: ACTION_SERVER_TODO:{server} , {tree}+{shot}+\{key}+0+0+0 ")
-        client.lpush(f"ACTION_SERVER_TODO:{server}", f"{tree}+{shot}+\{key}+0+0+0")
         
-        print(f"publish: ACTION_SERVER_PUBSUB:{server} , DO ")
-        client.publish(f"ACTION_SERVER_PUBSUB:{server}", "DO")
+        if command == "ABORT":
+            print(f"publish: ACTION_SERVER_PUBSUB:{server} , ABORT+\{key}")
+            client.publish(f"ACTION_SERVER_PUBSUB:{server}", f"ABORT+\{key}")
 
-    if command == "LOGS":
-        #print(f"TO BE IMPLEMENTED: {server} {key} {command}")
-        cmd1 = f"echo SHOW LOG: {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
-        cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
-        os.system(cmd1)
-        os.system(cmd2)
-        #time.sleep(1)
+        if command == "DISPATCH":
+            print(f"lpush: ACTION_SERVER_TODO:{server} , {tree}+{shot}+\{key}+0+0+0 ")
+            client.lpush(f"ACTION_SERVER_TODO:{server}", f"{tree}+{shot}+\{key}+0+0+0")
+        
+            print(f"publish: ACTION_SERVER_PUBSUB:{server} , DO ")
+            client.publish(f"ACTION_SERVER_PUBSUB:{server}", "DO")
+
+        if command == "LOGS":
+            #print(f"TO BE IMPLEMENTED: {server} {key} {command}")
+            #cmd1 = f"echo SHOW LOG: {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
+            cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
+            #os.system(cmd1)
+            os.system(cmd2)
+            #os.system(cmd1)            
+            #time.sleep(0.1)
+            #cmd = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
+            #print(cmd)
+            #os.system(cmd)
 
 
 
