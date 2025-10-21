@@ -414,6 +414,8 @@ class ActionDispatcher:
             self.red.hset('ACTION_STATUS:'+treeName+':'+str(shot), parts[3], parts[4]) 
             if len(parts) >= 4:
                 self.red.hset('ACTION_LOG:'+treeName+':'+str(shot), parts[3], msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
+##for debug
+#                print(msg[len(parts[0])+len(parts[1])+len(parts[2])+len(parts[3])+len(parts[4])+5:])
 
 #handle sequence
 
@@ -435,16 +437,23 @@ class ActionDispatcher:
                 for depNid in self.depAffected[treeShot][actionNid]:
                     if self.checkDispatch(tree, depNid):
                         ident = self.idents[treeShot][depNid]
-                        self.red.lpush('ACTION_SERVER_TODO:'+ident, 
-                            treeName+'+'+str(shot)+'+'+tree.getNode(depNid).getFullPath()+'+'+str(depNid)+'+'+str(self.timeouts[treeShot][depNid]))
-                        print('Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
-                        self.red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'DISPATCHED')
-                        self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'none')
-                        if not ident in self.pendingDepActions.keys():
-                            self.pendingDepActions[ident] = []
-                        self.pendingDepActions[ident].append(depNid)
-                        #in ogni caso
-                        self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
+            		serverExists = self.serverExists(ident)
+			if serverExists:
+                            self.red.lpush('ACTION_SERVER_TODO:'+ident, 
+                                treeName+'+'+str(shot)+'+'+tree.getNode(depNid).getFullPath()+'+'+str(depNid)+'+'+str(self.timeouts[treeShot][depNid]))
+                            print('Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
+                            self.red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'DISPATCHED')
+                            self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'none')
+                            if not ident in self.pendingDepActions.keys():
+                                self.pendingDepActions[ident] = []
+                            self.pendingDepActions[ident].append(depNid)
+                            #in ogni caso
+                            self.red.publish('ACTION_SERVER_PUBSUB:'+ident, 'DO')
+                        else:       
+                            print('SERVER MISSING for '+tree.getNode(depNid).getFullPath())
+                            self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'SERVER_OFF')
+                            self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'NotExecuted')
+
 
             self.updateMutex.release()
             if self.allSeqTerminated:
@@ -511,7 +520,6 @@ class ActionDispatcher:
         wasAlive = {}
         heartbeats = {}
         while True:
-#            idents = self.identList.copy()
             idents = self.identList[:]
             for ident in idents:
                 ids = self.getServerIds(ident)
