@@ -848,7 +848,7 @@ def handle_command():
     # logging.warning(f"Received command: {server_key} {command}")
 
     if command == 'START':
-        cmd = f"server_command.sh {server_key} {command} &"
+        cmd = f"sh server_command.sh {server_key} {command} &"
         os.system(cmd)
 
     if command == 'STOP' :
@@ -863,7 +863,7 @@ def handle_command():
         os.system(cmd)
 
     if command == 'KILL':
-        cmd = f"server_command.sh {server_key} {command} &"
+        cmd = f"sh server_command.sh {server_key} {command} &"
         os.system(cmd)
 
     print(f"Running shell command: {cmd} ")
