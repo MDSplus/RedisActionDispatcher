@@ -482,7 +482,7 @@ class ActionDispatcher:
                     print('Removing action due to server crash: ', fullPath)
                     self.pendingSeqActions[ident].remove(actionNid)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
                     if len(self.pendingSeqActions[ident]) == 0:
                         self.updateEvent.set()
@@ -500,7 +500,7 @@ class ActionDispatcher:
                     print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
                     self.pendingDepActions[ident].remove(actionNid)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
-                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'Aborted')
+                    self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
                     if len(self.pendingDepActions[ident]) == 0:
                         self.updateEvent.set()
@@ -529,7 +529,9 @@ class ActionDispatcher:
                     currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id)) 
                     if currHeartbeat == None: #Server never started
                         red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
-                        self.removeDeadPending(self.tree, ident, id)
+                        if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
+                            self.removeDeadPending(self.tree, ident, id)
+                        wasAlive[ident+':'+str(id)] = False
                     else:
                         if not ident in heartbeats.keys():
                             heartbeats[ident] = {}
@@ -539,21 +541,20 @@ class ActionDispatcher:
             for ident in idents:
                 ids = self.getServerIds(ident)
                 for id in ids:
-                    currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id))    
+                    currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id))   
                     if currHeartbeat == None: #Server never started
-                       # print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not found')
                         red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
-                        self.removeDeadPending(self.tree, ident, id)
+                        if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
+                            self.removeDeadPending(self.tree, ident, id)
+                        wasAlive[ident+':'+str(id)] = False
                     else:
                         if heartbeats[ident][id] != int(currHeartbeat) - 1:  #server died
                             red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
-                            self.removeDeadPending(self.tree, ident, id)
                             if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
-#                                self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DEAD+'+ self.tree.name+'+'+str(self.tree.shot)+'+'+ident+'+'+str(id))
                                 print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not responding')
+                            	self.removeDeadPending(self.tree, ident, id)
                             wasAlive[ident+':'+str(id)] = False
                         else:
-                        #    print('Watchdog passed for server class'+ident+' id '+str(id))
                             wasAlive[ident+':'+str(id)] = True
                             red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'ON')  
   
