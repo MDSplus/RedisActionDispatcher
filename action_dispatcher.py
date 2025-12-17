@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python
 import MDSplus
 import redis
 import threading
@@ -437,8 +437,8 @@ class ActionDispatcher:
                 for depNid in self.depAffected[treeShot][actionNid]:
                     if self.checkDispatch(tree, depNid):
                         ident = self.idents[treeShot][depNid]
-            		serverExists = self.serverExists(ident)
-			if serverExists:
+                        serverExists = self.serverExists(ident)
+                        if serverExists:
                             self.red.lpush('ACTION_SERVER_TODO:'+ident, 
                                 treeName+'+'+str(shot)+'+'+tree.getNode(depNid).getFullPath()+'+'+str(depNid)+'+'+str(self.timeouts[treeShot][depNid]))
                             print('Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
@@ -552,7 +552,7 @@ class ActionDispatcher:
                             red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                             if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                                 print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not responding')
-                            	self.removeDeadPending(self.tree, ident, id)
+                                self.removeDeadPending(self.tree, ident, id)
                             wasAlive[ident+':'+str(id)] = False
                         else:
                             wasAlive[ident+':'+str(id)] = True
