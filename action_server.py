@@ -402,8 +402,11 @@ def reportServerOn(red, ident, id):
         red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
         time.sleep(1)
 
-def main(serverClass, serverId, redisServer, sequential, process):
-    red = redis.Redis(host=redisServer)
+def main(serverClass, serverId, redisServer, redisPassword, sequential, process):
+    if redisPassword:
+        red = redis.StrictRedis(host=redisServer, password=redisPassword)
+    else:
+        red = redis.Redis(host=redisServer)
     ident = serverClass
     id = serverId
     print('Action server started. Server class: '+ident+', Server Id: '+id)
@@ -422,37 +425,10 @@ if __name__ == "__main__":
     # positional argument
     parser.add_argument("serverClass", help="Server Class")
     parser.add_argument("serverId", help="ServerId")
-    parser.add_argument("redisServer", help="REDIS server")
+    parser.add_argument("redisServer", nargs="?", help="REDIS server")
+    parser.add_argument("password", nargs="?", help="Redis password")
     parser.add_argument("--sequential", type=int, default=1, help="Force Mutual exclusion for log consistency")
     parser.add_argument("--process", type=int, default=0, help="Force Mutual exclusion for log consistency")
     args = parser.parse_args()
-    print(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
-    main(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        
-
-
-
-
-
-                
-
-
-
-
-
+    print(args.serverClass, args.serverId, args.redisServer, args.password, args.sequential, args.process)
+    main(args.serverClass, args.serverId, args.redisServer, args.password, args.sequential, args.process)

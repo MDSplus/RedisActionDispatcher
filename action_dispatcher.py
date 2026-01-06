@@ -627,10 +627,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-# Optional sanity check
-if args.password and not args.host:
-    parser.error("password requires host")
-
 host = args.host or 'localhost'
 password = args.password
 
