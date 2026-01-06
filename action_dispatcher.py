@@ -73,6 +73,7 @@ class ActionDispatcher:
  
 
     def __init__(self, red):
+        print('starting __init__')
         self.seqActions = {}
         self.depActions = {}
         self.dependencies = {}
@@ -82,10 +83,15 @@ class ActionDispatcher:
         self.completionEvent = {}
         self.actionDispatchStatus = {}
         self.identList = []
+        print('pubsub')
         self.cmdPubsub = red.pubsub()
+        print('subscribe')
         self.cmdPubsub.subscribe('ACTION_DISPATCHER_COMMANDS')
+        print('pubsub')
         self.updPubsub = red.pubsub()
+        print('subscribe')
         self.updPubsub.subscribe('ACTION_DISPATCHER_PUBSUB')
+        print('subscribed')
         self.NOT_DISPATCHED = 1
         self.DISPATCHED = 2
         self.DOING = 3
@@ -97,6 +103,8 @@ class ActionDispatcher:
         self.aborted = False
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
+        print('object initialized')
+
 
     def printTables(self):
         print("******Sequential Actions")
@@ -601,16 +609,38 @@ def manageNotifications(actDisp):
 def manageWatchdog(actDisp):
     actDisp.serverWatchdog()
 
+import argparse
 
-if len(sys.argv) != 1 and len(sys.argv) != 2:
-    print('usage: python action_dispatcher.py [redis server]')
-    sys.exit(0)
+parser = argparse.ArgumentParser()
 
-if len(sys.argv) == 1:
-    red = redis.Redis(host='localhost')
+parser.add_argument(
+    "host",
+    nargs="?",
+    help="Redis host"
+)
+
+parser.add_argument(
+    "password",
+    nargs="?",
+    help="Redis password (requires host)"
+)
+
+args = parser.parse_args()
+
+# Optional sanity check
+if args.password and not args.host:
+    parser.error("password requires host")
+
+host = args.host or 'localhost'
+password = args.password
+
+print(args.host, args.password)
+
+if password:
+    red = redis.StrictRedis(host=host, password=password)
 else:
-    red = redis.Redis(host=sys.argv[1])
-    
+    red = redis.Redis(host=host)
+
 act = ActionDispatcher(red)
 thread = Thread(target = manageNotifications, args = (act, ))
 thread.start()
