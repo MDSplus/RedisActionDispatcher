@@ -1,3 +1,97 @@
+## Dependencies
+- Install Python packages into your virtualenv:
+
+```
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Configuration
+- Redis connection is configured via CLI flags or environment variables using `redis_connector`.
+- Supported env vars:
+  - `REDIS_HOST` (default: localhost)
+  - `REDIS_PORT` (default: 6379)
+  - `REDIS_DB` (default: 0)
+  - `REDIS_USERNAME`
+  - `REDIS_PASSWORD`
+  - `REDIS_TLS` (true/1/yes/on to enable)
+  - `REDIS_TLS_CA_CERTS` (path to CA bundle)
+
+## Installation
+- Use the provided installer script to set up services with proper user/paths:
+```bash
+sudo ./install.sh [install_user] [install_path]
+```
+- Defaults: `install_user=rdispatch`, `install_path=/opt/rdispatch/RedisActionDispatcher`
+- The installer will:
+  - Create a system user (if needed)
+  - Set up the virtualenv and install dependencies
+  - Install and configure systemd services with proper paths
+  - Copy the example environment file to `/etc/rdispatch.env`
+
+## Services
+- Sample systemd units are included: `action_dispatcher.service`, `action_server_my_server_1.service`, `dispatcher_webmonitor.service`.
+- Service files use placeholders (`%INSTALL_USER%`, `%INSTALL_PATH%`) that are substituted during installation.
+- Hardened defaults are applied (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=full`, `ProtectHome=true`).
+
+### Templated server service
+- Use `action_server@.service` to avoid per-ID unit files.
+- Instance name must be `SERVER_CLASS:SERVER_ID`. Examples:
+  - Enable and start: `systemctl enable --now action_server@my_server:1`
+  - Check status: `systemctl status action_server@my_server:1`
+
+### Web monitor behind Nginx (optional)
+- The web monitor binds to `127.0.0.1:5000` by default (4 workers, 120s timeout, 600s keepalive).
+- A complete Nginx configuration is provided in [nginx-dispatcher.conf](nginx-dispatcher.conf).
+
+**To set up Nginx:**
+```bash
+# Install nginx
+sudo apt install nginx  # Debian/Ubuntu
+# or
+sudo yum install nginx  # RHEL/CentOS
+
+# Copy and edit the config
+sudo cp nginx-dispatcher.conf /etc/nginx/sites-available/dispatcher
+sudo nano /etc/nginx/sites-available/dispatcher  # Change server_name
+
+# Enable the site
+sudo ln -s /etc/nginx/sites-available/dispatcher /etc/nginx/sites-enabled/
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**Features included:**
+- Upstream connection pooling with keepalive
+- WebSocket/SSE support on `/stream` endpoint
+- Proper proxy headers and timeouts matching Gunicorn
+- Static file caching optimization
+- Optional HTTPS and basic auth examples (commented)
+- Health check endpoint configuration
+
+**Minimal example for quick setup:**
+```nginx
+server {
+    listen 80;
+    server_name dispatcher.local;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+After installation, edit `/etc/rdispatch.env` for Redis configuration, then enable/start services as shown by the installer.
+
+## Logging
+- `action_dispatcher.py` and `action_server.py` use Python `logging` with `--log-level` CLI option.
 RedisActionDispatcher
 ===
 New distributed dispatchless implementation of MDSplus action server based on REDIS

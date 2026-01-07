@@ -11,6 +11,7 @@ import json
 
 
 import redis_connector
+import logging
 
 LOG_FILE = "redis_pubsub.log"
 #redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var - default is "localhost"
@@ -19,7 +20,7 @@ LOG_FILE = "redis_pubsub.log"
 app = Flask(__name__)
 client = redis_connector.connect_from_env(decode_responses=True)
 redishost = client.connection_pool.connection_kwargs.get("host")
-print(f"Redis host set to: {redishost}")
+logging.getLogger(__name__).info("Redis host set to: %s", redishost)
 redis_client = client
 
 lock = Lock()

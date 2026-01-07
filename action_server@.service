@@ -1,5 +1,5 @@
 [Unit]
-Description=Action Dispatcher Service
+Description=Action Server (templated) — Class:ID from instance name
 After=network.target redis.service
 
 [Service]
@@ -7,7 +7,9 @@ Type=simple
 User=%INSTALL_USER%
 WorkingDirectory=%INSTALL_PATH%
 EnvironmentFile=/etc/rdispatch.env
-ExecStart=%INSTALL_PATH%/.venv/bin/python -u action_dispatcher.py
+# Usage example: systemctl start action_server@my_server:1
+# This shell trick splits %i as CLASS:ID into two args
+ExecStart=/bin/sh -c '%INSTALL_PATH%/.venv/bin/python -u action_server.py ${0%%:*} ${0##*:}' %i
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

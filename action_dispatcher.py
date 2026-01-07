@@ -73,7 +73,7 @@ class ActionDispatcher:
  
 
     def __init__(self, red):
-        print('starting __init__')
+        import logging
         self.seqActions = {}
         self.depActions = {}
         self.dependencies = {}
@@ -83,15 +83,10 @@ class ActionDispatcher:
         self.completionEvent = {}
         self.actionDispatchStatus = {}
         self.identList = []
-        print('pubsub')
         self.cmdPubsub = red.pubsub()
-        print('subscribe')
         self.cmdPubsub.subscribe('ACTION_DISPATCHER_COMMANDS')
-        print('pubsub')
         self.updPubsub = red.pubsub()
-        print('subscribe')
         self.updPubsub.subscribe('ACTION_DISPATCHER_PUBSUB')
-        print('subscribed')
         self.NOT_DISPATCHED = 1
         self.DISPATCHED = 2
         self.DOING = 3
@@ -103,7 +98,6 @@ class ActionDispatcher:
         self.aborted = False
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
-        print('object initialized')
 
 
     def printTables(self):
@@ -609,39 +603,37 @@ def manageNotifications(actDisp):
 def manageWatchdog(actDisp):
     actDisp.serverWatchdog()
 
-import argparse
-
-parser = argparse.ArgumentParser()
-
-parser.add_argument(
-    "host",
-    nargs="?",
-    help="Redis host"
-)
-
-parser.add_argument(
-    "password",
-    nargs="?",
-    help="Redis password (requires host)"
-)
-
 if __name__ == "__main__":
     import argparse
+    import logging
+    import signal
     import redis_connector
+
     parser = argparse.ArgumentParser()
     redis_connector.add_redis_args(parser)
 
-    # Add your other arguments here...
-    parser.add_argument("--channel", default="mychannel")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG","INFO","WARNING","ERROR","CRITICAL"], help="Logging level")
 
     args = parser.parse_args()
 
-    red = redis_connector.connect_redis_from_args(args)
-    print("Connected:", red.ping())
+    logging.basicConfig(level=getattr(logging, args.log_level))
+
+    red = redis_connector.connect_redis_from_args(args, prompt_on_auth_failure=True)
+    logging.info("Redis connected: %s", red.ping())
 
     act = ActionDispatcher(red)
-    thread = Thread(target = manageNotifications, args = (act, ))
+
+    # Basic graceful shutdown on SIGTERM/SIGINT
+    def _stop(*_):
+        try:
+            act.aborted = True
+        except Exception:
+            pass
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+
+    thread = Thread(target=manageNotifications, args=(act, ))
     thread.start()
-    threadWatch = Thread(target = manageWatchdog, args = (act, ))
+    threadWatch = Thread(target=manageWatchdog, args=(act, ))
     threadWatch.start()
     act.handleCommands()

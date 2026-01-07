@@ -49,7 +49,10 @@ def _get_password(args):
     if args.redis_password_file:
         if args.redis_password_file == "-":
             return sys.stdin.read().strip() or None
-        return open(args.redis_password_file, "r").read().strip() or None
+        try:
+            return open(args.redis_password_file, "r").read().strip() or None
+        except (FileNotFoundError, PermissionError) as e:
+            raise RuntimeError(f"Unable to read redis password file '{args.redis_password_file}': {e}")
     return os.getenv("REDIS_PASSWORD")
 
 
@@ -104,6 +107,8 @@ def connect_redis_from_args(args, *, prompt_on_auth_failure=False, **overrides):
             r.ping()
             return r
         raise
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError, redis.exceptions.RedisError) as e:
+        raise RuntimeError(f"Failed to connect to Redis at {kw.get('host')}:{kw.get('port')} db={kw.get('db')}: {e}")
 
 
 def connect_from_env(**overrides):
@@ -142,8 +147,11 @@ def connect_from_env(**overrides):
     kw = {k: v for k, v in kw.items() if v is not None}
 
     r = redis.Redis(**kw)
-    r.ping()
-    return r
+    try:
+        r.ping()
+        return r
+    except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError, redis.exceptions.TimeoutError, redis.exceptions.RedisError) as e:
+        raise RuntimeError(f"Failed to connect to Redis at {kw.get('host')}:{kw.get('port')} db={kw.get('db')}: {e}")
 
 # -------------------------
 # Example usage
