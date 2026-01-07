@@ -10,12 +10,16 @@ import os
 import json
 
 
+import redis_connector
+
 LOG_FILE = "redis_pubsub.log"
-redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var - default is "localhost"
-print(f"Redis host set to: {redishost}")
+#redishost= os.getenv("REDIS_HOST","localhost") #Permits setting a different redishost using env var - default is "localhost"
+#print(f"Redis host set to: {redishost}")
 
 app = Flask(__name__)
-client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
+client = redis_connector.connect_from_env(decode_responses=True)
+redishost = client.connection_pool.connection_kwargs.get("host")
+print(f"Redis host set to: {redishost}")
 redis_client = client
 
 lock = Lock()
@@ -100,7 +104,7 @@ def message_handler(message):
 
 def log_all_channels():
     setup_logger()
-    client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
+    client = redis_connector.connect_from_env(decode_responses=True)
     pubsub = client.pubsub()
     
     channels = client.pubsub_channels()
@@ -125,7 +129,7 @@ def log_all_channels():
 def server_list():
     setup_logger()
     
-    client = redis.StrictRedis(redishost, port=6379, decode_responses=True)
+    client = redis_connector.connect_from_env(decode_responses=True)
     pubsub = client.pubsub()
     
     channels = client.pubsub_channels()
@@ -1020,7 +1024,7 @@ if __name__ == "__main__":
 
     
     #Initialize red to be able to call functions from dispatcher_monitor.py and action_server.py  
-    red = redis.Redis(redishost)
+    red = redis_connector.connect_from_env()
 
 
     app.run(debug=True, host='0.0.0.0', port=3000, threaded=True)

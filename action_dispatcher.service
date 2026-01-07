@@ -1,0 +1,15 @@
+[Unit]
+Description=Action Dispatcher Service
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=jas
+WorkingDirectory=/opt/rdispatch/RedisActionDispatcher/
+EnvironmentFile=/etc/rdispatch.env
+ExecStart=/opt/rdispatch/RedisActionDispatcher/.venv/bin/python -u action_dispatcher.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

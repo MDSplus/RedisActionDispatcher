@@ -1,0 +1,15 @@
+[Unit]
+Description=Dispatcher Web Monitor (Gunicorn)
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=jas
+WorkingDirectory=/opt/rdispatch/RedisActionDispatcher/
+EnvironmentFile=/etc/rdispatch.env
+ExecStart=/opt/rdispatch/RedisActionDispatcher/.venv/bin/gunicorn -w 5 -k gevent --keep-alive 3600 --timeout 0 -b 0.0.0.0:5000 dispatcher_webmonitor:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
