@@ -7,7 +7,10 @@ Type=simple
 User=%INSTALL_USER%
 WorkingDirectory=%INSTALL_PATH%
 EnvironmentFile=/etc/rdispatch.env
-ExecStart=%INSTALL_PATH%/.venv/bin/python -u action_dispatcher.py
+ExecStart=/bin/bash -lc ' \
+  source /etc/profile.d/mdsplus.sh && \
+  exec %INSTALL_PATH%/.venv/bin/python -u action_dispatcher.py \
+'
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

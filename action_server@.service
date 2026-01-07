@@ -9,7 +9,7 @@ WorkingDirectory=%INSTALL_PATH%
 EnvironmentFile=/etc/rdispatch.env
 # Usage example: systemctl start action_server@my_server:1
 # This shell trick splits %i as CLASS:ID into two args
-ExecStart=/bin/sh -c '%INSTALL_PATH%/.venv/bin/python -u action_server.py ${0%%:*} ${0##*:}' %i
+ExecStart=/bin/sh -c '. /etc/profile.d/mdsplus.sh; exec %INSTALL_PATH%/.venv/bin/python -u action_server.py "${0%%:*}" "${0##*:}"' %i
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

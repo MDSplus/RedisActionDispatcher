@@ -5,12 +5,14 @@
 set -e
 
 INSTALL_USER="${1:-rdispatch}"
-INSTALL_PATH="${2:-/opt/rdispatch/RedisActionDispatcher}"
+INSTALL_GROUP="${2:-rdispatch}"
+INSTALL_PATH="${3:-/opt/rdispatch/RedisActionDispatcher}"
 SYSTEMD_DIR="/etc/systemd/system"
 ENV_FILE="/etc/rdispatch.env"
 
 echo "==> RedisActionDispatcher Service Installer"
 echo "    Install user: $INSTALL_USER"
+echo "    Install group: $INSTALL_GROUP"
 echo "    Install path: $INSTALL_PATH"
 echo ""
 
@@ -39,10 +41,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "$SCRIPT_DIR" != "$INSTALL_PATH" ]; then
     echo "==> Copying files to $INSTALL_PATH"
     cp -r "$SCRIPT_DIR"/* "$INSTALL_PATH/"
-    chown -R "$INSTALL_USER":"$INSTALL_USER" "$INSTALL_PATH"
+    chown -R "$INSTALL_USER":"$INSTALL_GROUP" "$INSTALL_PATH"
 else
     echo "==> Installing from current directory"
-    chown -R "$INSTALL_USER":"$INSTALL_USER" "$INSTALL_PATH"
+    chown -R "$INSTALL_USER":"$INSTALL_GROUP" "$INSTALL_PATH"
 fi
 
 # Create virtualenv if it doesn't exist
