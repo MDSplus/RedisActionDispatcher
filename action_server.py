@@ -402,17 +402,12 @@ def reportServerOn(red, ident, id):
         red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
         time.sleep(1)
 
-def main(serverClass, serverId, redisServer, redisPassword, sequential, process):
-    if redisPassword:
-        red = redis.StrictRedis(host=redisServer, password=redisPassword)
-    else:
-        red = redis.Redis(host=redisServer)
+def main(redisObject, serverClass, serverId,  sequential, process):
+    red=redisObject
     ident = serverClass
     id = serverId
     print('Action server started. Server class: '+ident+', Server Id: '+id)
     act = ActionServer(ident, id, red)
-    #atexit.register(reportExit, red, ident, id)
-    #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
     thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
     thread.start()
     act.handleCommands(sequential != 0, process != 0)
@@ -420,15 +415,19 @@ def main(serverClass, serverId, redisServer, redisPassword, sequential, process)
 
 
 if __name__ == "__main__":
+    import argparse
+    import redis_connector
     parser = argparse.ArgumentParser()
-    
-    # positional argument
+    redis_connector.add_redis_args(parser)
+
     parser.add_argument("serverClass", help="Server Class")
     parser.add_argument("serverId", help="ServerId")
-    parser.add_argument("redisServer", nargs="?", help="REDIS server")
-    parser.add_argument("password", nargs="?", help="Redis password")
     parser.add_argument("--sequential", type=int, default=1, help="Force Mutual exclusion for log consistency")
     parser.add_argument("--process", type=int, default=0, help="Force Mutual exclusion for log consistency")
+
     args = parser.parse_args()
-    print(args.serverClass, args.serverId, args.redisServer, args.password, args.sequential, args.process)
-    main(args.serverClass, args.serverId, args.redisServer, args.password, args.sequential, args.process)
+
+    red = redis_connector.connect_redis_from_args(args)
+    print("Connected:", red.ping())
+
+    main(red, args.serverClass, args.serverId, args.sequential, args.process)

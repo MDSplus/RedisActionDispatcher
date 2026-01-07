@@ -1,26 +1,31 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python
+import argparse
+import redis_connector
 import redis
 import os
 import sys
 import MDSplus
 
+parser = argparse.ArgumentParser()
+redis_connector.add_redis_args(parser)
 
-if len(sys.argv) != 5 and len(sys.argv) != 6:
-    print('usage: python show_log.py <tree> <shot>  <action full path> [redis server]')
-    sys.exit(0)
-if len(sys.argv) == 4:
-    red = redis.Redis(host='localhost')
-else:
-    red = redis.Redis(host=sys.argv[4])
+parser.add_argument("tree", type=str, default="test", help="Name of Tree")
+parser.add_argument("shot", type=int, default=0, help="Shot number")
+parser.add_argument("action", type=str, default="act1", help="Path of action to display")
 
-treeName = sys.argv[1].upper()
-shotStr = sys.argv[2]
-t = MDSplus.Tree(treeName, -1)
+args = parser.parse_args()
+
+red = redis_connector.connect_redis_from_args(args)
+print("Connected:", red.ping())
+
+treeName = args.tree
+shot = args.shot
+t = MDSplus.Tree(treeName, shot)
 try:
-    actionPath = t.getNode(sys.argv[3]).getFullPath()
+    actionPath = t.getNode(args.action).getFullPath()
 except:
     print('Cannot find node')
     sys.exit(0)
 
-log = red.hget('ACTION_LOG:'+treeName+':'+shotStr, actionPath)
+log = red.hget('ACTION_LOG:'+treeName+':'+str(shot), actionPath)
 print(log.decode('utf-8'))

@@ -625,37 +625,23 @@ parser.add_argument(
     help="Redis password (requires host)"
 )
 
-args = parser.parse_args()
+if __name__ == "__main__":
+    import argparse
+    import redis_connector
+    parser = argparse.ArgumentParser()
+    redis_connector.add_redis_args(parser)
 
-host = args.host or 'localhost'
-password = args.password
+    # Add your other arguments here...
+    parser.add_argument("--channel", default="mychannel")
 
-print(args.host, args.password)
+    args = parser.parse_args()
 
-if password:
-    red = redis.StrictRedis(host=host, password=password)
-else:
-    red = redis.Redis(host=host)
+    red = redis_connector.connect_redis_from_args(args)
+    print("Connected:", red.ping())
 
-act = ActionDispatcher(red)
-thread = Thread(target = manageNotifications, args = (act, ))
-thread.start()
-threadWatch = Thread(target = manageWatchdog, args = (act, ))
-threadWatch.start()
-act.handleCommands()
-
-
-
-
-                        
-
-
-
-
-
-                
-
-
-
-
-
+    act = ActionDispatcher(red)
+    thread = Thread(target = manageNotifications, args = (act, ))
+    thread.start()
+    threadWatch = Thread(target = manageWatchdog, args = (act, ))
+    threadWatch.start()
+    act.handleCommands()
