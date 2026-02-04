@@ -312,9 +312,9 @@ class ActionDispatcher:
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
-#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
-#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
 
     def handleCommands(self):
@@ -456,14 +456,19 @@ class ActionDispatcher:
 
 
             self.updateMutex.release()
-            if self.allSeqTerminated:
+            #if self.allSeqTerminated:
+	    allSeqTerminated = True
+            for ident in self.pendingSeqActions.keys():
+                if len(self.pendingSeqActions[ident]) > 0:
+                    allSeqTerminated = False
+            if allSeqTerminated:
                 allDepTerminated = True
                 for ident in self.pendingDepActions.keys():
                     if len( self.pendingDepActions[ident]) > 0:
                         allDepTerminated = False
                 if allDepTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
-#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
 
 
 #remove pending operations for a dead server

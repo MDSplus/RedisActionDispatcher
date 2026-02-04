@@ -14,13 +14,13 @@ if len(parts) == 1 and parts[0].lower() == 'quit':
 if len(parts) == 1 and parts[0].lower() == 'abort':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'ABORT')
 elif len(parts) == 3 and parts[0].lower() == 'create_pulse':
-    red.publish('ACTION_DISPATCHER_COMMANDS', 'create_pulse:'+parts[1]+':'+parts[2])
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'create_pulse:'+parts[1].upper()+':'+parts[2].upper())
 elif len(parts) == 3 and parts[0].lower() == 'build_tables':
-    red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+parts[1]+':'+parts[2])
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+parts[1].upper()+':'+parts[2].upper())
 elif len(parts) == 4 and parts[0].lower() == 'do_phase':
     monPubsub = red.pubsub()
     monPubsub.subscribe('DISPATCH_MONITOR_PUBSUB')
-    red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+parts[1]+':'+parts[2]+':'+parts[3])
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+parts[1].upper()+':'+parts[2].upper()+':'+parts[3].upper())
     while(True):
         message = monPubsub.get_message(timeout=100)
         if message == None:
