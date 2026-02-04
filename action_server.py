@@ -193,7 +193,7 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             timeoutSecs = int(2*timeout)
         for i in range(timeoutSecs):
             t.join(0.5)
-            if not t.isAlive():
+            if not t.is_alive():
                 break
             else:
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
