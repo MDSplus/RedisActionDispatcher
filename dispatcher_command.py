@@ -14,13 +14,19 @@ if len(parts) == 1 and parts[0].lower() == 'quit':
 if len(parts) == 1 and parts[0].lower() == 'abort':
     red.publish('ACTION_DISPATCHER_COMMANDS', 'ABORT')
 elif len(parts) == 3 and parts[0].lower() == 'create_pulse':
+    red.hset('DISPATCH_DEFAULT', 'TREE', parts[1].upper())
+    red.hset('DISPATCH_DEFAULT', 'SHOT', parts[2].upper())
     red.publish('ACTION_DISPATCHER_COMMANDS', 'create_pulse:'+parts[1].upper()+':'+parts[2].upper())
-elif len(parts) == 3 and parts[0].lower() == 'build_tables':
-    red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+parts[1].upper()+':'+parts[2].upper())
-elif len(parts) == 4 and parts[0].lower() == 'do_phase':
+elif len(parts) == 1 and parts[0].lower() == 'build_tables':
+    currTree = red.hget('DISPATCH_DEFAULT', 'TREE')
+    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT')
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+currTree+':'+currShot)
+elif len(parts) == 2 and parts[0].lower() == 'do_phase':
+    currTree = red.hget('DISPATCH_DEFAULT', 'TREE')
+    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT')
     monPubsub = red.pubsub()
     monPubsub.subscribe('DISPATCH_MONITOR_PUBSUB')
-    red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+parts[1].upper()+':'+parts[2].upper()+':'+parts[3].upper())
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+currTree+':'+currShot+':'+parts[1].upper())
     while(True):
         message = monPubsub.get_message(timeout=100)
         if message == None:
@@ -53,8 +59,8 @@ else:
     print('quit: quit dispatcher')
     print('abort: abort current sequence')
     print('create_pulse <tree> <shot>: create pulse file')
-    print('build_tables <tree> <shot>: create dispatch tables for the specified pulse file')
-    print('do_phase <tree> <shot> <phase>: execute the actions defined for that phase')
+    print('build_tables : create dispatch tables for the specified pulse file')
+    print('do_phase <phase>: execute the actions defined for that phase')
     print('do_sequence <tree> <shot> <phase> <start> <end>: execute the sequential actions and the depending ones defined for that phase in the specified sequence range')
     print('server_restart <server class> <server id>: abort pending actions and restart server')
     print('server_abort <server class> <server id> <action path>: abort specified actions')

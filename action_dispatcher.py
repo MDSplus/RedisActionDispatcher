@@ -116,7 +116,19 @@ class ActionDispatcher:
         print("\n******Dispatch Status")
         print( self.actionDispatchStatus)
 
-
+    def resetRedisInfo(self, treeName, treeShot):
+        pattern = str('ACTION_INFO:'+treeName.upper()+':'+str(treeShot)+':*')
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_SERVER_INFO:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_PHASE_INFO:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_STATUS:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
 
 
     def buildTables(self, tree):
@@ -312,7 +324,7 @@ class ActionDispatcher:
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
-            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
@@ -336,7 +348,8 @@ class ActionDispatcher:
                 if len(parts) != 3:
                     print('INVALID COMMAND: '+msg)
                     continue
-                treeName = parts[1]
+                treeName = parts[1].upper()
+                self.resetRedisInfo(treeName, parts[2])
                 shot = int(parts[2])
                 tree = MDSplus.Tree(treeName, -1)
                 tree.createPulse(shot)
