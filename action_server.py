@@ -402,14 +402,13 @@ def reportServerOn(red, ident, id):
         red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
         time.sleep(1)
 
-def main(serverClass, serverId, redisServer, sequential, process):
-    red = redis.Redis(host=redisServer)
+def main(redisObject, serverClass, serverId,  sequential, process):
+    import logging
+    red = redisObject
     ident = serverClass
     id = serverId
-    print('Action server started. Server class: '+ident+', Server Id: '+id)
+    logging.info('Action server started. Server class: %s, Server Id: %s', ident, id)
     act = ActionServer(ident, id, red)
-    #atexit.register(reportExit, red, ident, id)
-    #red.hset('ACTION_SERVER_ACTIVE:'+ident, id, 'ON')
     thread = threading.Thread(target = reportServerOn, args = (red, ident, id,))
     thread.start()
     act.handleCommands(sequential != 0, process != 0)
@@ -417,42 +416,23 @@ def main(serverClass, serverId, redisServer, sequential, process):
 
 
 if __name__ == "__main__":
+    import argparse
+    import logging
+    import redis_connector
     parser = argparse.ArgumentParser()
-    
-    # positional argument
+    redis_connector.add_redis_args(parser)
+
     parser.add_argument("serverClass", help="Server Class")
     parser.add_argument("serverId", help="ServerId")
-    parser.add_argument("redisServer", help="REDIS server")
     parser.add_argument("--sequential", type=int, default=1, help="Force Mutual exclusion for log consistency")
     parser.add_argument("--process", type=int, default=0, help="Force Mutual exclusion for log consistency")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG","INFO","WARNING","ERROR","CRITICAL"], help="Logging level")
+
     args = parser.parse_args()
-    print(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
-    main(args.serverClass, args.serverId, args.redisServer, args.sequential, args.process)
 
+    logging.basicConfig(level=getattr(logging, args.log_level))
 
+    red = redis_connector.connect_redis_from_args(args)
+    logging.info("Redis connected: %s", red.ping())
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        
-
-
-
-
-
-                
-
-
-
-
-
+    main(red, args.serverClass, args.serverId, args.sequential, args.process)

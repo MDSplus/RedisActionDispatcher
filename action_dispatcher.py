@@ -73,6 +73,7 @@ class ActionDispatcher:
  
 
     def __init__(self, red):
+        import logging
         self.seqActions = {}
         self.depActions = {}
         self.dependencies = {}
@@ -97,6 +98,7 @@ class ActionDispatcher:
         self.aborted = False
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
+
 
     def printTables(self):
         print("******Sequential Actions")
@@ -619,35 +621,37 @@ def manageNotifications(actDisp):
 def manageWatchdog(actDisp):
     actDisp.serverWatchdog()
 
+if __name__ == "__main__":
+    import argparse
+    import logging
+    import signal
+    import redis_connector
 
-if len(sys.argv) != 1 and len(sys.argv) != 2:
-    print('usage: python action_dispatcher.py [redis server]')
-    sys.exit(0)
+    parser = argparse.ArgumentParser()
+    redis_connector.add_redis_args(parser)
 
-if len(sys.argv) == 1:
-    red = redis.Redis(host='localhost')
-else:
-    red = redis.Redis(host=sys.argv[1])
-    
-act = ActionDispatcher(red)
-thread = Thread(target = manageNotifications, args = (act, ))
-thread.start()
-threadWatch = Thread(target = manageWatchdog, args = (act, ))
-threadWatch.start()
-act.handleCommands()
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG","INFO","WARNING","ERROR","CRITICAL"], help="Logging level")
 
+    args = parser.parse_args()
 
+    logging.basicConfig(level=getattr(logging, args.log_level))
 
+    red = redis_connector.connect_redis_from_args(args, prompt_on_auth_failure=True)
+    logging.info("Redis connected: %s", red.ping())
 
-                        
+    act = ActionDispatcher(red)
 
+    # Basic graceful shutdown on SIGTERM/SIGINT
+    def _stop(*_):
+        try:
+            act.aborted = True
+        except Exception:
+            pass
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
 
-
-
-
-                
-
-
-
-
-
+    thread = Thread(target=manageNotifications, args=(act, ))
+    thread.start()
+    threadWatch = Thread(target=manageWatchdog, args=(act, ))
+    threadWatch.start()
+    act.handleCommands()
