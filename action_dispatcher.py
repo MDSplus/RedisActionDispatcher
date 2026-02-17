@@ -6,6 +6,7 @@ import traceback
 import sys
 import os
 import time
+import json
 
 treeDEPENDENCY_AND = 10
 treeDEPENDENCY_OR = 11
@@ -116,19 +117,7 @@ class ActionDispatcher:
         print("\n******Dispatch Status")
         print( self.actionDispatchStatus)
 
-    def resetRedisInfo(self, treeName, treeShot):
-        pattern = str('ACTION_INFO:'+treeName.upper()+':'+str(treeShot)+':*')
-        for key in self.red.scan_iter(match=pattern):
-            self.red.delete(key)
-        pattern = 'ACTION_SERVER_INFO:'+treeName.upper()+':'+str(treeShot)
-        for key in self.red.scan_iter(match=pattern):
-            self.red.delete(key)
-        pattern = 'ACTION_PHASE_INFO:'+treeName.upper()+':'+str(treeShot)
-        for key in self.red.scan_iter(match=pattern):
-            self.red.delete(key)
-        pattern = 'ACTION_STATUS:'+treeName.upper()+':'+str(treeShot)
-        for key in self.red.scan_iter(match=pattern):
-            self.red.delete(key)
+
 
 
     def buildTables(self, tree):
@@ -324,7 +313,7 @@ class ActionDispatcher:
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
-#            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
@@ -348,8 +337,7 @@ class ActionDispatcher:
                 if len(parts) != 3:
                     print('INVALID COMMAND: '+msg)
                     continue
-                treeName = parts[1].upper()
-                self.resetRedisInfo(treeName, parts[2])
+                treeName = parts[1]
                 shot = int(parts[2])
                 tree = MDSplus.Tree(treeName, -1)
                 tree.createPulse(shot)
@@ -367,6 +355,7 @@ class ActionDispatcher:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
                 self.buildTables(self.tree)
+                red.set('LAST_BUILD_TABLE', json.dumps({'tree': parts[1], 'shot': parts[2]}))
             elif msg.upper()[:8] == 'DO_PHASE':
                 parts = msg.split(':')
                 if len(parts) != 4:              
@@ -393,6 +382,8 @@ class ActionDispatcher:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
                 self.doSequence(tree, parts[3], int(parts[4]), int(parts[5]))
+            elif msg.upper()[:13] == 'PRINT_PENDING':
+                self.printPendingActions()
             else:
                 print('Unknown command: '+msg)
 
@@ -470,7 +461,7 @@ class ActionDispatcher:
 
             self.updateMutex.release()
             #if self.allSeqTerminated:
-	    allSeqTerminated = True
+            allSeqTerminated = True
             for ident in self.pendingSeqActions.keys():
                 if len(self.pendingSeqActions[ident]) > 0:
                     allSeqTerminated = False
@@ -482,6 +473,22 @@ class ActionDispatcher:
                 if allDepTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+
+
+#Print currently pending actions
+    def printPendingActions(self):
+        print('\n*********PENDING SEQUENTIAL ACTIONS*********')
+        for ident in self.pendingSeqActions.keys():
+            print(ident)
+            for actionNid in self.pendingSeqActions[ident]:
+                print('\t'+tree.getNode(actionNid).getFullPath())
+        print('\n*********PENDING DEPENDENT ACTIONS*********')
+        for ident in self.pendingDepActions.keys():
+            print(ident)
+            for actionNid in self.pendingDepActions[ident]:
+                print('\t'+tree.getNode(actionNid).getFullPath())
+        print('************************************************')
+
 
 
 #remove pending operations for a dead server
@@ -514,7 +521,7 @@ class ActionDispatcher:
                     break
                 statusInfos = statusInfo.decode('utf-8').split()
                 #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
-                if statusInfos[0] == 'DOING':
+                if statusInfos[0] == 'DOING' or statusInfos[0] == 'DISPATCHED':
                     print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
                     self.pendingDepActions[ident].remove(actionNid)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
