@@ -551,7 +551,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS').then(() => showWarning())">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning();">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -791,11 +791,14 @@ def get_action_data():
 
             # STEP 3: Fetch last Build Table info
             last_build = redis_client.get("LAST_BUILD_TABLE")
+            #curr_shot = redis_client.get("DISPATCH_INFO:CURR_SHOT")
+
             if last_build:
                 try:
                     last_build = json.loads(last_build)
                     last_tree = last_build.get("tree")
                     last_shot = last_build.get("shot")
+                    #last_shot = curr_shot.get("shot")
                 except json.JSONDecodeError:
                     last_tree = last_shot = None
             else:
