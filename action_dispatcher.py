@@ -118,6 +118,20 @@ class ActionDispatcher:
         print( self.actionDispatchStatus)
 
 
+    def resetRedisInfo(self, treeName, treeShot):
+        pattern = str('ACTION_INFO:'+treeName.upper()+':'+str(treeShot)+':*')
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_SERVER_INFO:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_PHASE_INFO:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+        pattern = 'ACTION_STATUS:'+treeName.upper()+':'+str(treeShot)
+        for key in self.red.scan_iter(match=pattern):
+            self.red.delete(key)
+
 
 
     def buildTables(self, tree):
@@ -341,6 +355,7 @@ class ActionDispatcher:
                 shot = int(parts[2])
                 tree = MDSplus.Tree(treeName, -1)
                 tree.createPulse(shot)
+                self.resetRedisInfo(treeName, parts[2])
                 self.red.hset('DISPATCH_INFO', 'CURR_TREE', treeName)
                 self.red.hset('DISPATCH_INFO', 'CURR_SHOT', shot)
             elif msg.upper()[:12] == 'BUILD_TABLES':
@@ -384,7 +399,7 @@ class ActionDispatcher:
                 self.doSequence(tree, parts[3], int(parts[4]), int(parts[5]))
             elif msg.upper()[:13] == 'PRINT_PENDING':
                 self.printPendingActions()
-             elif msg.upper()[:13] == 'ABORT_PENDING':
+            elif msg.upper()[:13] == 'ABORT_PENDING':
                 self.abortPendingActions()
             else:
                 print('Unknown command: '+msg)
