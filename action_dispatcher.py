@@ -250,7 +250,7 @@ class ActionDispatcher:
 
     def serverExists(self, ident):
         for id in range(50): #no more than 50 servers per class assumed....
-            serverStatus = red.hget('ACTION_SERVER_ACTIVE:'+ident, str(id)) 
+            serverStatus = self.red.hget('ACTION_SERVER_ACTIVE:'+ident, str(id)) 
             if serverStatus == b'ON':
                 return True
         return False 
@@ -355,7 +355,7 @@ class ActionDispatcher:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
                 self.buildTables(self.tree)
-                red.set('LAST_BUILD_TABLE', json.dumps({'tree': parts[1], 'shot': parts[2]}))
+                self.red.set('LAST_BUILD_TABLE', json.dumps({'tree': parts[1], 'shot': parts[2]}))
             elif msg.upper()[:8] == 'DO_PHASE':
                 parts = msg.split(':')
                 if len(parts) != 4:              
@@ -384,6 +384,8 @@ class ActionDispatcher:
                 self.doSequence(tree, parts[3], int(parts[4]), int(parts[5]))
             elif msg.upper()[:13] == 'PRINT_PENDING':
                 self.printPendingActions()
+             elif msg.upper()[:13] == 'ABORT_PENDING':
+                self.abortPendingActions()
             else:
                 print('Unknown command: '+msg)
 
@@ -481,13 +483,36 @@ class ActionDispatcher:
         for ident in self.pendingSeqActions.keys():
             print(ident)
             for actionNid in self.pendingSeqActions[ident]:
-                print('\t'+tree.getNode(actionNid).getFullPath())
+                print('\t'+self.tree.getNode(actionNid).getFullPath())
         print('\n*********PENDING DEPENDENT ACTIONS*********')
         for ident in self.pendingDepActions.keys():
             print(ident)
             for actionNid in self.pendingDepActions[ident]:
-                print('\t'+tree.getNode(actionNid).getFullPath())
+                print('\t'+self.tree.getNode(actionNid).getFullPath())
         print('************************************************')
+
+#abort currently pending actions
+    def abortPendingActions(self):
+        print('\n*********PENDING SEQUENTIAL ACTIONS*********')
+        for ident in self.pendingSeqActions.keys():
+            print(ident)
+            for actionNid in self.pendingSeqActions[ident]:
+                actionPath = self.tree.getNode(actionNid).getFullPath()
+                print('Aborting: '+ actionPath)
+                self.red.hset('ACTION_STATUS:'+self.tree.name+':'+str(self.tree.shot), actionPath, 'Aborted')
+                self.aborted = True
+            self.pendingSeqActions[ident] = []   
+        print('\n*********PENDING DEPENDENT ACTIONS*********')
+        for ident in self.pendingDepActions.keys():
+            print(ident)
+            for actionNid in self.pendingDepActions[ident]:
+                actionPath = self.tree.getNode(actionNid).getFullPath()
+                print('Aborting: '+ actionPath)
+                self.red.hset('ACTION_STATUS:'+self.tree.name+':'+str(self.tree.shot), actionPath, 'Aborted')
+                self.aborted = True
+            self.pendingDepActions[ident] = []   
+        print('************************************************')
+        self.updateEvent.set()
 
 
 
@@ -497,13 +522,13 @@ class ActionDispatcher:
         if ident in self.pendingSeqActions.keys():
             for actionNid in self.pendingSeqActions[ident]:
                 fullPath = tree.getNode(actionNid).getFullPath()
-                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                statusInfo = self.red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
                 if statusInfo == None:
                     print('********************\nInternal error: Missing Action Info for '+fullPath+'\n********************')
                     break
                 statusInfos = statusInfo.decode('utf-8').split()
-    #            if statusInfos[0] == 'DISPATCHED' or (statusInfos[0] == 'DOING' and statusInfo[1] == ident):
-                if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
+                if True:  #Remove ALL pending actions
+#                if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
                     print('Removing action due to server crash: ', fullPath)
                     self.pendingSeqActions[ident].remove(actionNid)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
@@ -515,13 +540,13 @@ class ActionDispatcher:
         if ident in self.pendingDepActions.keys(): 
             for actionNid in self.pendingDepActions[ident]:
                 fullPath = tree.getNode(actionNid).getFullPath()
-                statusInfo = red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
+                statusInfo = self.red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
                 if statusInfo == None:
                     print('Internal error: Missing Action Info for '+fullPath)
                     break
                 statusInfos = statusInfo.decode('utf-8').split()
-                #if statusInfos[0] == 'DOING' and statusInfo[1] == ident:
-                if statusInfos[0] == 'DOING' or statusInfos[0] == 'DISPATCHED':
+                if True: #Remove ALL pending actions
+                #if statusInfos[0] == 'DOING' or statusInfos[0] == 'DISPATCHED':
                     print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
                     self.pendingDepActions[ident].remove(actionNid)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
@@ -535,7 +560,7 @@ class ActionDispatcher:
     def getServerIds(self, ident):
         ids = []
         for id in range(50): #no more than 5 servers per class assumed....
-            serverStatus = red.hget('ACTION_SERVER_ACTIVE:'+ident, str(id)) 
+            serverStatus = self.red.hget('ACTION_SERVER_ACTIVE:'+ident, str(id)) 
             if serverStatus != None:
                 ids.append(id)
         return ids 
@@ -553,7 +578,7 @@ class ActionDispatcher:
                 for id in ids:
                     currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id)) 
                     if currHeartbeat == None: #Server never started
-                        red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
+                        self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                         if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                             self.removeDeadPending(self.tree, ident, id)
                         wasAlive[ident+':'+str(id)] = False
@@ -568,20 +593,20 @@ class ActionDispatcher:
                 for id in ids:
                     currHeartbeat = self.red.hget('ACTION_SERVER_HEARTBEAT:'+ident, str(id))   
                     if currHeartbeat == None: #Server never started
-                        red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
+                        self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                         if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                             self.removeDeadPending(self.tree, ident, id)
                         wasAlive[ident+':'+str(id)] = False
                     else:
                         if heartbeats[ident][id] != int(currHeartbeat) - 1:  #server died
-                            red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
+                            self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                             if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                                 print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not responding')
                                 self.removeDeadPending(self.tree, ident, id)
                             wasAlive[ident+':'+str(id)] = False
                         else:
                             wasAlive[ident+':'+str(id)] = True
-                            red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'ON')  
+                            self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'ON')  
   
 
 

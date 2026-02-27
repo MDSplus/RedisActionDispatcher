@@ -55,6 +55,8 @@ elif len(parts) == 3 and parts[0].lower() == 'server_quit':
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'QUIT+'+parts[2])
 elif len(parts) == 1 and parts[0].lower() == 'print_pending': 
     red.publish('ACTION_DISPATCHER_COMMANDS', 'print_pending')
+elif len(parts) == 1 and parts[0].lower() == 'abort_pending': 
+    red.publish('ACTION_DISPATCHER_COMMANDS', 'abort_pending')
 else:
     print("Usage: python dispatcher_commands.py redis_sever <command>")
     print('Available commands: ')
@@ -68,4 +70,6 @@ else:
     print('server_abort <server class> <server id> <action path>: abort specified actions')
     print('server_stop <server class> <server id>: stop server (finish pending actions) ')
     print('server_quit <server class> <server id>: abrupt quit server')
+    print('print_pending: let the dispatcher print pending action')
+    print('abort_pending: force the dispatcher abort pending action')
 
