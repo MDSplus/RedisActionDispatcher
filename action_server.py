@@ -96,7 +96,6 @@ def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, server
             if p.exitcode != None:
                 break
             else:
-                printf('ECCO IL TIMEOUT!!!!!  ', actionPath)
                 if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
                     red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
                     break
