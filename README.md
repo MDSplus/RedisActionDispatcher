@@ -144,6 +144,7 @@ Note that the **Logs** button accesses the latest action log information stored 
   * Dispatch button: to dispatch the phase defined in the previous field
   * Custom commands (debug)
 
+**Note**: The experiment name must be specified in uppercase, and the phase name is case sensitive. For example, if a phase is named INIT, then typing init and pressing Dispatch won't execute any action. <br><br> 
 It is possible, therefore, to operate the sequence entirely from the Web interface. This is, however, not the case in common use cases, where the sequence is coordinated by an external tool (such as the main state machine supervising the experiment sequence). In this case, the external tool will interact with the dispatcher via dispatcher_command.py, and the Web interface passively displays the current state. In this case, only the two initial fields of the first row of the Action Monitor tab (Redis server and Experiment name) must be defined.  
 
 ### Live Summary
