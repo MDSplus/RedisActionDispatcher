@@ -182,7 +182,7 @@ The **Server Heartbeat** tab:
 Install the required dependencies:
 
 ```bash
-pip install gunicorn gevent
+pip install gunicorn gevent flask
 ```
 
 Launch the web server using:
