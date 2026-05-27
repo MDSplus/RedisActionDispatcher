@@ -1,96 +1,215 @@
 RedisActionDispatcher
 ===
-New distributed dispatchless implementation of MDSplus action server based on REDIS
+New distributed implementation of MDSplus dispatcher based on REDIS
 ---
 <br>
-This is a new implementaion of the MDSplus action dispatcher based on REDIS. The dispatcher itself is no more existing and its functions are directly implemented by a set of Action Servers written in python. Action servers have access to the MDSplus tree and therefore every Action Server instance can derive all the information that is required for the execution of the actions assigned to that server class. <br> However some degree of overall synchronization is required namely:
-
-  - Action server instances must receive commands for building internal dispatch tables and execute phases
-  - Non sequential actions are triggered by the termination of other actions, possibly on different Action Servers
-  - When more than one Action Server instance for a given server class is defined, it needs to synchronize with the other Action Server(s) of the same class in order to make sure that all actions with lower sequence number have been execute (possibly in another ActionServer instance of the same server class) before incrementing the sequence number.
-  - Again, when more than one Action Server instance for a given server class is defined, they must make sure that a given action is executed only by a single action server. 
-  - When an action needs to be aborted it is necessary to forward the request to the Action Server doing that action.
+This is a new implementation of the MDSplus action dispatcher based on redis. The new implementation is written entirely in Python and uses REDIS as a communication medium between the central dispatcher and the action servers. The dispatcher carries out the overall synchronization, ensuring that sequential actions are executed in the proper sequence (per server instance) and dependent actions are executed when their associated condition is met. The server class name is passed as an argument to action servers in addition to a unique ID number (usually set to 1). It is, in fact, possible to launch more than one action server per server class to carry out parallel execution of actions with the same server class. Action servers will carry out the assigned tasks and notify the dispatcher via redis when the action has terminated. Pending actions can be aborted, and the associated terminal output is captured and saved in redis so that it can be later visualized (see the Web interface description).
 <br>
-The above functions are now provided by REDIS via the following two REDIS mechanisms:
+To launch the action dispatcher: <br>
 
-- *in memory hashes*
-- *publish-subscribe channels*
-<br>
-The shared information on REDIS required for the proper Action Servers synchronization are the following:
-
- - Action Status Hash, indexed by **{experiment}:{shot}:ActionStatus:{server class}**. The hash key is the action nid and the corresponding value is the current actioin status (NOT_DISPATCHED, DOING, DONE, ERROR, TIMEOUT, ABORTED, STREAMING). This shared information reflects the current action execution status for a given experiment, shot and server class.  
- - AbortRequest, indexed by **{experiment}:{shot}:AbortRequest:{server class}**. The hash key is the action nid and the corresponding value is the abort request (1/0).
-<br>
-Other information is stored on REDIS, but it is not required by Action Servers, rather by the dispatch monitor (see below).
-<br>
-The REDIS publish-subscribe (pubsub) channels used for Action Server synchronization are indexed by COMMAND:{Server class} and every Action Server instance subscribes to the corresponding pubsub channel. Observe that Action Server instances of the same server class will subscribe to the same pubsub channel. The messages sent over these pubsub channels may originate from the central supervisor (issuing the phase execution commands) or by the Action Server instances themselves in case they just executed an action that potentially triggers another dependent action. The messages sent over pubsub channels can be:
-
-- **QUIT** forces the Action Server to exit from listening to commands
-- **BUILD_TABLES** createds the internal tables (see below). The target Action server will collect from the tree all related action information, including all actions for this server class and actions (for this or other server classes) that may be possibly triggered by such action (see local structure description below)
-- **DO_PHASE** Request for phase execution. The target Action Server(s) shall start the execution of sequential actions in the order dictated by the sequence number. In order to share the load among Action ervers of the same server class, once the list of actions for a given sequence number has been selected, the next action to executed is picked choosing one action of the set that has not been yet dispatched, looking the shared REDIS action status information and updating it when an action has been chosen for execution. The current sequence (for a given sequence number) will terminate only when all the actions for that sequence number have DONE or ERROR or ABORTED or TIMEOUT status. In order to avoid race conditions that may arise when concurrently picking an action whose current shared state is NOT_DISPATCHED and updating it as DOING, the REDIS watch mechanism to ensure atomic test and set is used. When an action has been executed, a new UPDATE message is sent to the pubsub channels for all the server classes for which a potentially triggered dependent action is defined.
-- **UPDATE:{triggering action nid}** When this message is received, the condition for all potentially affected local dependent actions (i.e. declared for this server class) is checked, looking at the currrent action status in the REDIS shared memory. Whenever the condition is satisfied, the action is executed, still using the REDIS test and set mechanism in order to make sure that only one istance of the Action Server for that server class will execute the dependent action. Observe that dependent actions are executed in parallel with sequential action (executed by the Action Server in sequence).
-<br>  
-
-### Local Action Server structures
-In order to provide proper action dispatching, the Action Server will hold the following private python structures:
- - ***seqActions*** keeps track of the declared sequential actions for this server class for each phase. *Dictionary{Phase:Dictionary{seqNum:Nid list}}*
- - ***depActions*** keeps track of conditional action (those declared for this action server) and the associated condition  *Dictionary{nid: Dependency}*
- - ***inDependency*** keeps track for each local/global action nid the list of local potentially affected action nids
-    *Dictionary{str(nid):list of affected nids}*
-- ***outDependency*** keeps track for every local action the list of idents hosting potentially affected actions
-*Dictionary{nid: list of affected idents (including self)}*
-- ***actTimeout*** keeps track of possible (>0) action timeouts *Dictionary{nid: timeout}*
-- ***completionEvent*** keeps track for every action nid for this action server the possible completion event *Dictionary{nid: event name}*
-
-### Action execution: classic
-
-Classic action execution is the mode supported so far by the old MDSplus Dispatcher
-<br>
-Even if the Action Server executes sequential actions in real sequence, it executes them in a separate thread, later joining the thread in order to continue with the next sequewntial action. A separate thread is required in order to check for action timeout (by using a timeout of .1 seconds in a join loop) and checking possible request for abort in REDIS memory (this check is performed every 0.5 seconds). Conditional actions are executed in a detached thread.
-
-### Action execution: streamed
-
-Streamed actions have been introduced with this version. In order to be streamed, an action must:
-
-- Be declared as a device method
-- Have the extended attribute "is_streamed" set to "yes"
-
-If the above conditions are met, the execution occurs in a detached thread, and a set of methods are called for that device:
- ***{method}_init*** is called once first;  ***{method}_step*** is then repeatedly called. This method will return a Python dictionary including at least the key **'is_last'**. If the associated value is false, the loop continues, otherwise ***{method}_finish*** is called and the action terminates. 
- <br>
- Streamed action supports two mechanism for asynchronous dispatch notification:
- 
- - **Status Update** triggered by the presence of the **'update'** key (with an associated update string) in the dictionary returned by ***{method}_step***. In this case the Action Server uses the same mechanism for conditional action triggering. Any declared conditional action in the tree can be declared as dependent on a given update for a given streamed action. For this purpose the *less than* operator is used in the condition definition (e.g. "my_update" \< {streamed action}) 
- - **Action Update** that may be triggered during streamed execution. Action updates are declared in the tree as members of the streamed action. The dispatch information for this actions can be of any supported type (conditional or sequential), but the task information shall be a string. This string will be used to define the specific method to be called whenever an action update is triggered. An update action will produce any effect only in the case it is triggered during the target streamed action execution. In this case, as soon as the current ***{method}_step*** terminates for the target device (without signaling termination via 'is_last' key in the returned dictionary), method ***{method}_{update string}*** shall be called once, before calling again ***{method}_step***.
-
-### Web based Dispatch Monitor
-
-A "Proof of Concept" dispatch monitor is provided in order to validate the candidate technology. This dispatch monitor is implemented in node.js and uses the nodejs REDIS interface to access REDIS data and to send commands over REDIS pubsub channels. The node.js application will then implement a Web server exporting dispatching information, using Server Sent Event (SSE) to update the current action status, and triggering the construction of the dispatch tables, the execution of phases and the abort of actions, via AJAX messages sent to the node.js Web server implementaion and then translated by the latter into REDIS memory access or pubsub channel messages. 
-Even if not required by Action Servers, additional information is exported over REDIS memory in order to be displayed by the in the dispatch moinitor web page.
-
-### To test
-
- - clone repo
- - install redis
- - cd `RedisActionDispatcher`
- - define default_tree_path 
-   `export default_tree_path=$PWD`
- - start monitor
-   `node disp_monitor.js`
- - browse to monitor - http://localhost:8080/
- - start dispatcher
 ```
-$ python3
->>> from dispatcher import ActionServer
->>> act = ActionServer('my_server')
->>> act.handleCommands()
+python action_dispatcher.py [redis server]
 ```
- - create a pulse for the 'action' tree
+Where redis server is the IP address of the machine hosting the redis server. If not defined, localhost is assumed <br>
+To launch an action server: <br>
+
 ```
-$ mdstcl 
-TCL> set tree action
-TCL> create pulse 1
+  python action_server.py <server_class> <server_id> <redis_server>
 ```
- - click 'Build Tables' 2x 1st time
- - click 'Init'
- - watch actions execute
+  
+Any number of action servers can be launched in a distributed system, provided that the redis_server argument points to the same IP (the machine hosting the redis server). <br>
+Once a dispatcher and a set of servers have been launched, it is possible to interact with the system via the following command: <br>
+
+```
+python dispatcher_commands.py <redis_sever> <command>
+```
+where <command> is one of the following:
+
+-  **quit**: quit dispatcher
+- **abort**: abort the current sequence
+- **create_pulse <tree> <shot>**: create a new pulse file
+- **build_tables**: create dispatch tables for the current pulse file (defined by create_pulse)
+- **do_phase <phase>**: execute the actions defined for the specified phase
+- **server_restart <server class> <server id>**: abort pending actions and restart server')
+- **server_abort <server class> <server id> <action path>**: abort specified actions for the specified server
+- **server_stop <server class> <server id>**: stop server (after finishing pending actions)
+- **server_quit <server class> <server id>**: abrupt quit server
+- **print_pending**: let the dispatcher print pending action (for debug purpose)
+
+It is possible to print the terminal output during execution for a given action server and possibly a given action:
+
+```
+ python display_logs.py <tree> <shot> <server class> <action full path> <redis server>
+```
+where the action full path refers to the path in the tree of the target action. If ANY is specified, then the terminal output of all actions for that server class is displayed during execution.
+<br><br>
+# Web interface
+Even if it is possible to interact with the action dispatcher via program dispatcher_commands.py, the preferred interface is web-based. 
+<br>
+The web application provides real-time visibility and control over distributed actions and servers using a Redis-backed architecture.
+
+It is intended for:
+
+* System operators
+* Developers
+* Engineers overseeing MDSPlus Redis Dispatcher automated processes
+
+---
+
+## Main Tabs Overview
+
+| Tab                  | Purpose                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| **Server Monitor**   | View the real-time status (ON/OFF) of all active servers and perform basic server actions. |
+| **Actions Monitor**  | Monitor action status by tree/shot and dispatch or abort actions.                          |
+| **Log Viewer**       | Submit log messages manually for testing and stream live logs from the server log file.    |
+| **Server HeartBeat** | View the latest heartbeat activity timestamp for each server.                              |
+
+---
+
+## Server Monitor
+![ServerMonitor](images/server_monitor.png)
+The **Server Monitor** tab provides:
+
+* Live status of all servers registered in Redis (`ACTION_SERVER_ACTIVE`)
+* Server status display (`ON` / `OFF`)
+* Server control buttons:
+
+  * `START`
+  * `QUIT`
+  * `RESTART`
+  * `KILL`
+* Automatic updates of server information
+* Priority sorting where active (`ON`) servers appear first
+
+### Notes
+
+* The control buttons `START` and `RESTART` invoke scripts that  implement project-specific actions. These actions will launch the Python program action_server.py on the target, system-specific,  machines. These operations are carried out by the Web interface by invoking the following shell script:
+
+```
+sh server_command.sh {server_class} {command}   
+```
+where command can be either START or RESTART. It is therefore sufficient to provide such a shell script to adapt the Web interface to the specific project application. 
+
+## Actions Monitor
+
+The **Actions Monitor** tab displays two tables:
+
+1. **Active Actions** (based on `CURRENT_PHASE`)
+2. **All Actions** (regardless of phase)
+
+### Action Information
+
+Each row includes:
+
+* Tree
+* Shot
+* Server
+* Node
+* State
+* Status
+* Phase
+
+### Available Actions
+
+Each row supports the following operations:
+
+* `DISPATCH`
+* `ABORT`
+* `LOGS`
+
+The **LOGS** button accesses the latest action log information stored in Redis.
+
+### Additional Features
+
+* Dispatcher form for:
+
+  * Pulse creation
+  * Table builds
+  * Custom commands
+
+### Color Coding
+
+| Color  | Meaning           |
+| ------ | ----------------- |
+| Blue   | Not Dispatched    |
+| Green  | Success           |
+| Red    | Failed or Aborted |
+| Orange | In Progress       |
+| Grey   | Server Off        |
+
+### Live Summary
+
+A live summary displays:
+
+* Total actions
+* Categorized status counts
+
+Failed and aborted actions are displayed first.
+
+---
+
+## Log Viewer
+
+The **Log Viewer** tab provides:
+
+* Submission of custom log messages for testing
+* Live streaming of the `redis_pubsub.log` file
+* Auto-scrolling log updates
+
+### Additional Logging
+
+Other logs can be redirected to the log file configured in the Flask application running on the server.
+
+This allows project-specific logs to appear in the Log Viewer tab.
+
+---
+
+## Server Heartbeat
+
+The **Server Heartbeat** tab:
+
+* Displays the latest known heartbeat timestamp for each server
+* Updates when receiving messages from:
+
+```text
+ACTION_SERVER_PUBSUB:*
+```
+
+---
+
+## Usage Tips
+
+* Use `DISPATCH` only after `create_pulse` and `build_tables` have been executed.
+* Use logs to debug Redis messaging or command execution failures.
+* Monitor the **Active Actions** table for work currently in progress.
+* Use the **Heartbeat** tab to diagnose active server polling status.
+
+---
+
+## Starting the Web Server
+
+Install the required dependencies:
+
+```bash
+pip install gunicorn gevent
+```
+
+Launch the web server using:
+
+```bash
+gunicorn -w 5 -k gevent --keep-alive 3600 --timeout 0 -b 0.0.0.0:5000 dispatcher_webmonitor:app
+```
+
+## Gunicorn Options
+
+| Option                      | Description                                          |
+| --------------------------- | ---------------------------------------------------- |
+| `-w 5`                      | Start 5 worker processes                             |
+| `-k gevent`                 | Use the Gevent worker class for asynchronous support |
+| `--keep-alive 3600`         | Keep connections alive for up to 3600 seconds        |
+| `--timeout 0`               | Disable worker timeout                               |
+| `-b 0.0.0.0:5000`           | Bind the server to all interfaces on port 5000       |
+| `dispatcher_webmonitor:app` | Python module and Flask app instance to serve        |
+
+---
