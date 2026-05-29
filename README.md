@@ -184,6 +184,11 @@ Install the required dependencies:
 ```bash
 pip install gunicorn gevent flask
 ```
+Make sure that environment variable REDIS_SERVER is set to the Redis server IP
+
+```
+export REDIS_SERVER=<redis server IP>
+```
 
 Launch the web server using:
 
