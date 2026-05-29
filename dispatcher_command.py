@@ -18,12 +18,12 @@ elif len(parts) == 3 and parts[0].lower() == 'create_pulse':
     red.hset('DISPATCH_DEFAULT', 'SHOT', parts[2].upper())
     red.publish('ACTION_DISPATCHER_COMMANDS', 'create_pulse:'+parts[1].upper()+':'+parts[2].upper())
 elif len(parts) == 1 and parts[0].lower() == 'build_tables':
-    currTree = red.hget('DISPATCH_DEFAULT', 'TREE')
-    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT')
+    currTree = red.hget('DISPATCH_DEFAULT', 'TREE').decode('utf-8')
+    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT').decode('utf-8')
     red.publish('ACTION_DISPATCHER_COMMANDS', 'build_tables:'+currTree+':'+currShot)
 elif len(parts) == 2 and parts[0].lower() == 'do_phase':
-    currTree = red.hget('DISPATCH_DEFAULT', 'TREE')
-    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT')
+    currTree = red.hget('DISPATCH_DEFAULT', 'TREE').decode('utf-8')
+    currShot = red.hget('DISPATCH_DEFAULT', 'SHOT').decode('utf-8')
     monPubsub = red.pubsub()
     monPubsub.subscribe('DISPATCH_MONITOR_PUBSUB')
     red.publish('ACTION_DISPATCHER_COMMANDS', 'do_phase:'+currTree+':'+currShot+':'+parts[1].upper())

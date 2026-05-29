@@ -490,7 +490,10 @@ class ActionDispatcher:
                 if allDepTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
-
+            try:
+                tree.close()
+            except:
+                pass
 
 #Print currently pending actions
     def printPendingActions(self):
@@ -535,6 +538,7 @@ class ActionDispatcher:
     def removeDeadPending(self, tree, ident, id):
         self.updateMutex.acquire()
         if ident in self.pendingSeqActions.keys():
+            print('PENDING ACTIONS FOR DEAD SERVER: ')
             for actionNid in self.pendingSeqActions[ident]:
                 fullPath = tree.getNode(actionNid).getFullPath()
                 statusInfo = self.red.hget('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath)
@@ -544,13 +548,13 @@ class ActionDispatcher:
                 statusInfos = statusInfo.decode('utf-8').split()
                 if True:  #Remove ALL pending actions
 #                if statusInfos[0] == 'DISPATCHED' or statusInfos[0] == 'DOING':
-                    print('Removing action due to server crash: ', fullPath)
-                    self.pendingSeqActions[ident].remove(actionNid)
+                    print('Removing sequential action due to server crash ('+str(len(self.pendingSeqActions[ident]))+'): ', fullPath)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                    if len(self.pendingSeqActions[ident]) == 0:
-                        self.updateEvent.set()
+            self.pendingSeqActions[ident].clear()
+            self.updateEvent.set()
+
     #same for pending dependent  actions
         if ident in self.pendingDepActions.keys(): 
             for actionNid in self.pendingDepActions[ident]:
@@ -562,13 +566,12 @@ class ActionDispatcher:
                 statusInfos = statusInfo.decode('utf-8').split()
                 if True: #Remove ALL pending actions
                 #if statusInfos[0] == 'DOING' or statusInfos[0] == 'DISPATCHED':
-                    print('TROVATA AZIONE SERVER MORTO!!!!!!!!!!!!!!!!!!!', fullPath)
-                    self.pendingDepActions[ident].remove(actionNid)
+                    print('Removing dependent action due to server crash ('+str(len(self.pendingDepActions[ident]))+'): ', fullPath)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-                    if len(self.pendingDepActions[ident]) == 0:
-                        self.updateEvent.set()
+            self.pendingDepActions[ident].clear()
+            self.updateEvent.set()
         self.updateMutex.release()
 
 

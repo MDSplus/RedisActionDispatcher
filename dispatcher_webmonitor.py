@@ -551,7 +551,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning();">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS').then(() => showWarning())">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -948,11 +948,13 @@ def handle_post():
     if action_type == 'send' and command:
         cmd = f"python dispatcher_command.py {server} {command}"
     elif action_type == 'dispatch':
-        cmd = f"python dispatcher_command.py {server} do_phase {tree} {shot} {action}"
+        cmd = f"python dispatcher_command.py {server} do_phase {action}"
+#        cmd = f"python dispatcher_command.py {server} do_phase {tree} {shot} {action}"
     elif action_type == 'create':
         cmd = f"python dispatcher_command.py {server} create_pulse {tree} {shot}"
     elif action_type == 'build':
-        cmd = f"python dispatcher_command.py {server} build_tables {tree} {shot}"
+        cmd = f"python dispatcher_command.py {server} build_tables"
+#        cmd = f"python dispatcher_command.py {server} build_tables {tree} {shot}"
     else:
         logging.error("Invalid or missing parameters.")
         return '', 400
