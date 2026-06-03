@@ -552,7 +552,8 @@ class ActionDispatcher:
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-            self.pendingSeqActions[ident].clear()
+#            self.pendingSeqActions[ident].clear()
+            self.pendingSeqActions[ident] = []
             self.updateEvent.set()
 
     #same for pending dependent  actions
@@ -570,7 +571,8 @@ class ActionDispatcher:
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-            self.pendingDepActions[ident].clear()
+#            self.pendingDepActions[ident].clear()
+            self.pendingDepActions[ident] = []
             self.updateEvent.set()
         self.updateMutex.release()
 
