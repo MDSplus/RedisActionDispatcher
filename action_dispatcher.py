@@ -353,8 +353,11 @@ class ActionDispatcher:
                     continue
                 treeName = parts[1]
                 shot = int(parts[2])
-                tree = MDSplus.Tree(treeName, -1)
-                tree.createPulse(shot)
+                try:
+                    tree = MDSplus.Tree(treeName, -1)
+                    tree.createPulse(shot)
+                except Exception as e:
+                    print('Error creating pulse ' + treeName + '   ' + str(shot) + '   ' + ': '+str(e))
                 self.resetRedisInfo(treeName, parts[2])
                 self.red.hset('DISPATCH_INFO', 'CURR_TREE', treeName)
                 self.red.hset('DISPATCH_INFO', 'CURR_SHOT', shot)
