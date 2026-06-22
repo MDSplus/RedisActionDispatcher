@@ -248,7 +248,9 @@ class ActionDispatcher:
             self.currSeqNumbers[ident] = startSeqNumber - 1
 
         self.updateEvent.clear()
+        self.updateMutex.acquire()
         self.performSequenceStep(tree, phase)
+        self.updateMutex.release()
         while not self.allSeqTerminated:
             self.updateEvent.wait()
             self.updateEvent.clear()
@@ -257,7 +259,9 @@ class ActionDispatcher:
                 self.doing = False
                 self.aborted = False
                 return
+            self.updateMutex.acquire()
             self.performSequenceStep(tree, phase)
+            self.updateMutex.release()
         self.doing = False
 #        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_SEQUENCE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
         print('DoSequence terminated')
@@ -316,6 +320,7 @@ class ActionDispatcher:
             print('Dispatch Table missing')
             return
 #        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'START_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+phase)
+        print('Collecting actions for this phase...')
         try:
             seqIdents = self.seqActions[treeShot][phase].keys()
             minSeqNumber = sys.maxsize
@@ -326,11 +331,18 @@ class ActionDispatcher:
                         maxSeqNumber = seqNum
                     if seqNum < minSeqNumber:
                         minSeqNumber = seqNum
-            self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)  
+            print('Action collected, doing sequence')
+            self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)
+            print('Sequence terminated')  
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
+        try:
+            tree.close()
+        except:
+            pass
+
 
     def handleCommands(self):
         while True:
@@ -356,6 +368,7 @@ class ActionDispatcher:
                 try:
                     tree = MDSplus.Tree(treeName, -1)
                     tree.createPulse(shot)
+                    tree.close()
                 except Exception as e:
                     print('Error creating pulse ' + treeName + '   ' + str(shot) + '   ' + ': '+str(e))
                 self.resetRedisInfo(treeName, parts[2])
@@ -366,6 +379,10 @@ class ActionDispatcher:
                 if len(parts) != 3:
                     print('Invalid command: ', msg)
                     continue
+                try:
+                    self.tree.close()
+                except:
+                    pass
                 try:
                     #until next build  table self.tree is the current tree. Used by Watchdog
                     self.tree = MDSplus.Tree(parts[1], int(parts[2]))
@@ -386,9 +403,10 @@ class ActionDispatcher:
                     continue
 #report current phase for dispatch monitor
                 self.red.hset('CURRENT_PHASE', parts[1], parts[3])
-
+                print('Starting thread')
                 thread = threading.Thread(target = self.doPhase, args = (tree, parts[3].upper(), ))
                 thread.start()
+                print('Thread started')
             elif msg.upper()[:11] == 'DO_SEQUENCE':
                 parts = msg.split(':')
                 if len(parts) != 6:              
