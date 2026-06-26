@@ -136,6 +136,13 @@ class ActionDispatcher:
 
     def buildTables(self, tree):
         print("BUILD TABLES "+ tree.name+'  '+str(tree.shot))
+
+        self.updateMutex.acquire()
+        self.seqActions = {}
+        self.depActions = {}
+        self.dependencies = {}
+        self.depAffected = {}
+
         dd = tree.getNodeWild('***', 'ACTION')
         treeShot = tree.name+str(tree.shot)
         self.seqActions[treeShot] = {}
@@ -162,12 +169,6 @@ class ActionDispatcher:
             if not ident in self.identList:
                 self.identList.append(ident)
             if d.isOn():
-#                if idx == 0:
-#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
-#                elif idx == len(dd) - 1:
-#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
-#                else:
-#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+1+'+ident+'+'+d.getFullPath())
                 try:
                     try:
                         timeout = int(d.getTimeout().data())
@@ -210,12 +211,6 @@ class ActionDispatcher:
                 except Exception as e:
                     print('Error collecting action ' + d.getPath()+ ': '+str(e))
             else: #d is off
- #               if idx == 0:
- #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_BEGIN+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
- #               elif idx == len(dd) - 1:
- #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD_END+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
- #               else:
- #                   self.red.publish('DISPATCH_MONITOR_PUBSUB', 'BUILD+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+str(tree.getNode(d.getFullPath()).getNid())+'+0+'+ident+'+'+d.getFullPath())
                 self.idents[treeShot][actNid] = ident  #Record in any case the action's server
                 self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), d.getFullPath(), 'none')
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
@@ -223,6 +218,7 @@ class ActionDispatcher:
 
         
         self.printTables()
+        self.updateMutex.release()
 
     def handleAbort(self):
         self.aborted = True
@@ -243,12 +239,13 @@ class ActionDispatcher:
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
         self.endSeqNumber = endSeqNumber
+        self.updateMutex.acquire()
         for ident in self.seqActions[treeShot][phase].keys():
             self.pendingSeqActions[ident] = []
             self.currSeqNumbers[ident] = startSeqNumber - 1
 
         self.updateEvent.clear()
-        self.updateMutex.acquire()
+#        self.updateMutex.acquire()
         self.performSequenceStep(tree, phase)
         self.updateMutex.release()
         while not self.allSeqTerminated:
@@ -401,6 +398,10 @@ class ActionDispatcher:
                 except:
                     print('Cannot open tree '+parts[1] + '  shot '+parts[2])
                     continue
+
+                if self.doing:
+                    print("Sequence already in progress")
+                    continue
 #report current phase for dispatch monitor
                 self.red.hset('CURRENT_PHASE', parts[1], parts[3])
                 print('Starting thread')
@@ -452,6 +453,7 @@ class ActionDispatcher:
                 continue
             path = parts[3]
             print('Action '+parts[3]+ '   terminated. Status:  '+ parts[4])
+            self.updateMutex.acquire()
             self.actionDispatchStatus[treeShot][actionNid] = self.DONE
             self.red.hset('ACTION_STATUS:'+treeName+':'+str(shot), parts[3], parts[4]) 
             if len(parts) >= 4:
@@ -461,7 +463,7 @@ class ActionDispatcher:
 
 #handle sequence
 
-            self.updateMutex.acquire()
+#            self.updateMutex.acquire()
             if not ident in self.pendingSeqActions.keys():
                 print('Internal error: unextected ident: '+ident)
                 self.updateMutex.release()
