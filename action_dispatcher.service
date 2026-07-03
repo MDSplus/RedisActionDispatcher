@@ -1,0 +1,25 @@
+[Unit]
+Description=Action Dispatcher Service
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=%INSTALL_USER%
+WorkingDirectory=%INSTALL_PATH%
+EnvironmentFile=/etc/rdispatch.env
+ExecStart=/bin/bash -lc ' \
+  source /etc/profile.d/mdsplus.sh && \
+  exec %INSTALL_PATH%/.venv/bin/python -u action_dispatcher.py \
+'
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=inherit
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
