@@ -6,6 +6,6 @@
   "author": "Gabriele Manduchi <gabriele.manduchi@igi.cnr.it>",
   "license": "MIT",
   "dependencies": {
-    "redis": "^4.1.0"
+    "redis": "^4.7.1"
   }
 }

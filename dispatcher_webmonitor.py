@@ -20,6 +20,8 @@ redis_client = client
 
 lock = Lock()
 
+warning_sem = threading.Semaphore(1)
+
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Active servers
 def get_active_servers():
@@ -136,13 +138,26 @@ def server_list():
 
 @app.route("/showlastlog")
 def ShowLastLog():
-    try:
-        with open("show.last.log", "r", encoding="utf-8") as f:
-            message = f.read().strip()
-    except FileNotFoundError:
-        message = "⚠️ No log file found."
-    except Exception as e:
-        message = f"Error reading log: {e}"
+    time.sleep(1) # Even with semaphore Firefox fails to make the actions in sequence! Chrome works well without this sleep!
+    with warning_sem:
+        print("Starting ShowLastLog()")
+        file="show.last.log"
+        #while not os.path.exists(file):
+        #    time.sleep(0.1)
+            
+
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                message = f.read().strip()
+        except FileNotFoundError:
+            message = "⚠️ No log file found."
+            print(message)
+        except Exception as e:
+            message = f"Error reading log: {e}"
+            print(message)
+        
+        cmd="rm "+file
+        os.system(cmd)
 
     return jsonify(message)
 
@@ -473,7 +488,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning();">Logs</button>
                 </td>`;
             tbody_active.appendChild(row_active);
         });
@@ -536,7 +551,7 @@ TEMPLATE = """
                 <td>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'DISPATCH')">Dispatch</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
-                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning()">Logs</button>
+                   <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS').then(() => showWarning())">Logs</button>
                 </td>`;
             tbody.appendChild(row);
         });
@@ -573,14 +588,14 @@ TEMPLATE = """
 
 
     function sendActionCommand(tree, shot, server, key, command) {
-        fetch('/server_actioncommand', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tree: tree, shot: shot, server: server, key: key, command: command })
-        })
-        .then(response => response.json())
-        .then(data => console.log(data.message))
-        .catch(error => console.error('Error sending command:', error));
+		fetch('/server_actioncommand', {
+		    method: 'POST',
+		    headers: { 'Content-Type': 'application/json' },
+		    body: JSON.stringify({ tree: tree, shot: shot, server: server, key: key, command: command })
+		})
+		.then(response => response.json())
+		.then(data => console.log(data.message))
+		.catch(error => console.error('Error sending command:', error));
     }
 
     document.getElementById("commandForm").addEventListener("submit", function(e) {
@@ -776,11 +791,14 @@ def get_action_data():
 
             # STEP 3: Fetch last Build Table info
             last_build = redis_client.get("LAST_BUILD_TABLE")
+            #curr_shot = redis_client.get("DISPATCH_INFO:CURR_SHOT")
+
             if last_build:
                 try:
                     last_build = json.loads(last_build)
                     last_tree = last_build.get("tree")
                     last_shot = last_build.get("shot")
+                    #last_shot = curr_shot.get("shot")
                 except json.JSONDecodeError:
                     last_tree = last_shot = None
             else:
@@ -801,7 +819,10 @@ def get_action_data():
             data_active = [
                 item for item in filtered_data
                 if (item['tree'], item['phase']) in phase_lookup_set
+                and item['status'] != 'OFF' #Filter out OFF Actions
             ]                           
+            # Sort: first by whether status is not 'Failure' (False < True), then alphabetically by server
+            data_active.sort(key=lambda x: (x['state'] != 'Failure', x['server']))
 
             sorted_data = sorted(
                 filtered_data,
@@ -830,7 +851,7 @@ def handle_command():
     # logging.warning(f"Received command: {server_key} {command}")
 
     if command == 'START':
-        cmd = f"server_command.sh {server_key} {command} &"
+        cmd = f"sh server_command.sh {server_key} {command} &"
         os.system(cmd)
 
     if command == 'STOP' :
@@ -845,7 +866,7 @@ def handle_command():
         os.system(cmd)
 
     if command == 'KILL':
-        cmd = f"server_command.sh {server_key} {command} &"
+        cmd = f"sh server_command.sh {server_key} {command} &"
         os.system(cmd)
 
     print(f"Running shell command: {cmd} ")
@@ -861,34 +882,39 @@ def handle_command():
 
 @app.route('/server_actioncommand', methods=['POST'])
 def handle_actioncommand():
-    setup_logger()
+    with warning_sem:
+        setup_logger()
 
-    data = request.json
-    tree = data.get('tree')
-    shot = data.get('shot')
-    server = data.get('server')
-    key = data.get('key')
-    command = data.get('command')
+        data = request.json
+        tree = data.get('tree')
+        shot = data.get('shot')
+        server = data.get('server')
+        key = data.get('key')
+        command = data.get('command')
 
-    
-    if command == "ABORT":
-        print(f"publish: ACTION_SERVER_PUBSUB:{server} , ABORT+\{key}")
-        client.publish(f"ACTION_SERVER_PUBSUB:{server}", f"ABORT+\{key}")
-
-    if command == "DISPATCH":
-        print(f"lpush: ACTION_SERVER_TODO:{server} , {tree}+{shot}+\{key}+0+0+0 ")
-        client.lpush(f"ACTION_SERVER_TODO:{server}", f"{tree}+{shot}+\{key}+0+0+0")
         
-        print(f"publish: ACTION_SERVER_PUBSUB:{server} , DO ")
-        client.publish(f"ACTION_SERVER_PUBSUB:{server}", "DO")
+        if command == "ABORT":
+            print(f"publish: ACTION_SERVER_PUBSUB:{server} , ABORT+\{key}")
+            client.publish(f"ACTION_SERVER_PUBSUB:{server}", f"ABORT+\{key}")
 
-    if command == "LOGS":
-        #print(f"TO BE IMPLEMENTED: {server} {key} {command}")
-        cmd1 = f"echo SHOW LOG: {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
-        cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
-        os.system(cmd1)
-        os.system(cmd2)
-        #time.sleep(1)
+        if command == "DISPATCH":
+            print(f"lpush: ACTION_SERVER_TODO:{server} , {tree}+{shot}+\{key}+0+0+0 ")
+            client.lpush(f"ACTION_SERVER_TODO:{server}", f"{tree}+{shot}+\{key}+0+0+0")
+        
+            print(f"publish: ACTION_SERVER_PUBSUB:{server} , DO ")
+            client.publish(f"ACTION_SERVER_PUBSUB:{server}", "DO")
+
+        if command == "LOGS":
+            #print(f"TO BE IMPLEMENTED: {server} {key} {command}")
+            #cmd1 = f"echo SHOW LOG: {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
+            cmd2 = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} >> show.last.log"
+            #os.system(cmd1)
+            os.system(cmd2)
+            #os.system(cmd1)            
+            #time.sleep(0.1)
+            #cmd = f"python show_log.py {tree} {shot} "+"\\"+"\\"+f"{key} {redishost} > show.last.log"
+            #print(cmd)
+            #os.system(cmd)
 
 
 
@@ -922,11 +948,13 @@ def handle_post():
     if action_type == 'send' and command:
         cmd = f"python dispatcher_command.py {server} {command}"
     elif action_type == 'dispatch':
-        cmd = f"python dispatcher_command.py {server} do_phase {tree} {shot} {action}"
+        cmd = f"python dispatcher_command.py {server} do_phase {action}"
+#        cmd = f"python dispatcher_command.py {server} do_phase {tree} {shot} {action}"
     elif action_type == 'create':
         cmd = f"python dispatcher_command.py {server} create_pulse {tree} {shot}"
     elif action_type == 'build':
-        cmd = f"python dispatcher_command.py {server} build_tables {tree} {shot}"
+        cmd = f"python dispatcher_command.py {server} build_tables"
+#        cmd = f"python dispatcher_command.py {server} build_tables {tree} {shot}"
     else:
         logging.error("Invalid or missing parameters.")
         return '', 400
