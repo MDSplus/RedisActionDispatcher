@@ -51,7 +51,7 @@ elif len(parts) == 3 and parts[0].lower() == 'server_quit':
     if serverStatus != 'ON':
         print('Server was not active')
     else:
-        print('Server was not active')
+        print('Server killed')
     red.publish('ACTION_SERVER_PUBSUB:'+parts[1], 'QUIT+'+parts[2])
 elif len(parts) == 1 and parts[0].lower() == 'print_pending': 
     red.publish('ACTION_DISPATCHER_COMMANDS', 'print_pending')

@@ -702,7 +702,7 @@ def get_data():
 
 @app.route('/action_status')
 def get_action_data():
-    def generate_action_data():
+    def generate_action_dataXXX():
         while True:
             server_keys = redis_client.keys("CURRENT_PHASE*")
             data_4 =[] 
@@ -833,10 +833,21 @@ def get_action_data():
 
             #yield f"data_active: {json.dumps(data_active)}\n\n"
             #yield f"data: {json.dumps(sorted_data)}\n\n"
+            print(f"data: {json.dumps({'data': sorted_data, 'data_active': data_active})}\n\n")
             yield f"data: {json.dumps({'data': sorted_data, 'data_active': data_active})}\n\n"
 
             #print(f"data: {json.dumps(data)}\n\n")
             time.sleep(1)
+    def generate_action_data():
+        snapshotsPubsub = redis_client.pubsub()
+        snapshotsPubsub.subscribe('SNAPSHOT_PUBSUB')
+        while True:
+            message = snapshotsPubsub.get_message(timeout=100)
+            if message == None or not 'data' in message.keys() or message['type'] != 'message': #or not isinstance(message['data'], bytes):
+                continue
+            msg = message['data']
+            yield 'data: '+msg+'\n\n'
+
     return Response(generate_action_data(), mimetype='text/event-stream')
 
 @app.route('/server_command', methods=['POST'])

@@ -79,10 +79,11 @@ def executeProcess(treeName, shot, actionPath):
     outFd.flush()
     outFd.close()
 
+#Never launched in windows
 def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone):
         p = Process(target=executeProcess, args = (treeName, shot, actionPath, ))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
-        red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+        red.publish('ACTION_DISPATCHER_AUX_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
        #self.processHash[self.treeName+':' + str(self.shot) + self.actionPath] = p
         p.start()
@@ -103,10 +104,13 @@ def handleExecuteProcess(treeName, shot, actionPath, timeout, red, ident, server
         if p.exitcode == None: #not yet terminated
             p.terminate()
 
-        logFile = open(str(pid) + 'Log.out', 'r')
-        log = logFile.read()
-        logFile.close()
-        os.system('rm '+str(pid) + 'Log.out')
+        try:
+            logFile = open(str(pid) + 'Log.out', 'r')
+            log = logFile.read()
+            logFile.close()
+            os.system('rm '+str(pid) + 'Log.out')
+        except:
+            log = ''
         print("LOG:")
         print(log)
         print("*****")
@@ -176,14 +180,17 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential, mutex):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential,))
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
+        red.publish('ACTION_DISPATCHER_AUX_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
         if isSequential:
             mutex.acquire()
-        if isSequential:
-            originalStdoutFd = os.dup(1)  # duplicate fd 1
-            outFd = open(str(tid)+'Log.out',  'w')
-            os.dup2(outFd.fileno(), 1)
+        isWindows = (sys.platform == 'win32')
+        if not isWindows:
+            if isSequential:
+                originalStdoutFd = os.dup(1)  # duplicate fd 1
+                outFd = open(str(tid)+'Log.out',  'w')
+                os.dup2(outFd.fileno(), 1)
 
         t.start()
         if timeout == 0:
@@ -202,19 +209,22 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 #        if t.isAlive(): #not yet terminated
 #            p.terminate()
         if isSequential:
-            outFd.flush()
-            os.fsync(outFd)
-            outFd.close()
-            os.dup2(originalStdoutFd, 1)
-
+            if not isWindows:
+                outFd.flush()
+                os.fsync(outFd)
+                outFd.close()
+                os.dup2(originalStdoutFd, 1)
 
         if isSequential:
-          logFile = open(str(tid) + 'Log.out', 'r')
-          log = logFile.read()
-          logFile.close()
-          os.system('rm '+str(tid) + 'Log.out')
+            if not isWindows:
+                logFile = open(str(tid) + 'Log.out', 'r')
+                log = logFile.read()
+                logFile.close()
+                os.system('rm '+str(tid) + 'Log.out')
+            else:
+                log = '' 
         else:
-          log = ''
+            log = ''
         if isSequential:
             print("LOG:")
             print(log)
@@ -223,7 +233,10 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
             statusFile =  open(str(tid) + 'Status.out', 'r')
             status = statusFile.read()
             statusFile.close()
-            os.system('rm '+str(tid) + 'Status.out')
+            if isWindows:
+                os.system('del '+str(tid) + 'Status.out')
+            else:
+                os.system('rm '+str(tid) + 'Status.out')
             if status == None or len(status) == 0:
                 status = 'Unknown Error'
         except:
@@ -243,7 +256,6 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
  
         red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
-        red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid+'+'+status)
 
 
 
@@ -402,7 +414,11 @@ def reportServerOn(red, ident, id):
         time.sleep(1)
 
 def main(serverClass, serverId, redisServer, sequential, process):
-    red = redis.Redis(host=redisServer)
+    isWindows = (sys.platform == 'win32')
+    if isWindows:
+        red = redis.Redis(host=redisServer, protocol = 2)
+    else:
+        red = redis.Redis(host=redisServer)
     ident = serverClass
     id = serverId
     print('Action server started. Server class: '+ident+', Server Id: '+id)
