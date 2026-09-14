@@ -47,7 +47,7 @@ def executeProcess(treeName, shot, actionPath):
         node = tree.getNode(actionPath)
         task = node.getData().getTask()
         date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
-        print(date + '  Doing '+ actionPath)
+        print(date + ', Doing '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
         if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
             tree.tcl('do '+ actionPath)
             status = 'Success'
@@ -69,7 +69,7 @@ def executeProcess(treeName, shot, actionPath):
             status = 'Failure'
             traceback.print_exc(exc)
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
-    print(date + ' Done '+ actionPath)
+    print(date + ', Done '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
     statusFile = open(str(os.getpid()) + 'Status.out', 'w')
 #    statusFile.write('PERDINDIRIDINA')
     statusFile.write(status)
@@ -142,7 +142,7 @@ def execute(treeName, shot, actionPath, tid, isSequential):
         node = tree.getNode(actionPath)
         task = node.getData().getTask()
         date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
-        print(date + '  Doing '+ actionPath)
+        print(date + ', Doing '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
         if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
             tree.tcl('do '+ actionPath)
             status = 'Success'
@@ -169,7 +169,7 @@ def execute(treeName, shot, actionPath, tid, isSequential):
   
 
     date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
-    print(date + ' Done '+ actionPath)
+    print(date + ', Done '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
     statusFile = open(str(tid) + 'Status.out', 'w')
     statusFile.write(status)
     statusFile.flush()
@@ -179,18 +179,26 @@ def execute(treeName, shot, actionPath, tid, isSequential):
 
 def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, actionNid, notifyDone, tid, isSequential, mutex):
         t = threading.Thread(target=execute, args = (treeName, shot, actionPath, tid, isSequential,))
+       # red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
+       # red.publish('ACTION_DISPATCHER_AUX_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+       # red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+       # red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
+        if isSequential:
+            mutex.acquire()
+
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
         red.publish('ACTION_DISPATCHER_AUX_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
         red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
-        if isSequential:
-            mutex.acquire()
+
         isWindows = (sys.platform == 'win32')
         if not isWindows:
             if isSequential:
                 originalStdoutFd = os.dup(1)  # duplicate fd 1
+                originalStderrFd = os.dup(2)  # duplicate fd 1
                 outFd = open(str(tid)+'Log.out',  'w')
                 os.dup2(outFd.fileno(), 1)
+                os.dup2(outFd.fileno(), 2)
 
         t.start()
         if timeout == 0:
@@ -210,10 +218,13 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
 #            p.terminate()
         if isSequential:
             if not isWindows:
+                sys.stdout.flush()
+                sys.stderr.flush()
                 outFd.flush()
                 os.fsync(outFd)
                 outFd.close()
                 os.dup2(originalStdoutFd, 1)
+                os.dup2(originalStderrFd, 2)
 
         if isSequential:
             if not isWindows:

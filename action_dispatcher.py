@@ -7,6 +7,7 @@ import sys
 import os
 import time
 import json
+from datetime import datetime
 
 treeDEPENDENCY_AND = 10
 treeDEPENDENCY_OR = 11
@@ -107,7 +108,8 @@ class ActionDispatcher:
         self.snapshotTimer = threading.Timer(0.3, self.snapshotTimerExpired)
         self.isSnapshotPending = False
         self.snapshotTimer.start()
-
+        self.phaseInfoMsg = ''
+        self.crashedServers = []
 
     def printTables(self):
         print("******Sequential Actions")
@@ -233,6 +235,7 @@ class ActionDispatcher:
                 self.monitorSnapshot[path]['status'] = 'OFF'
         
         self.printTables()
+        self.phaseInfoMsg = ''
         self.reportSnapshot()
         self.updateMutex.release()
 
@@ -251,6 +254,7 @@ class ActionDispatcher:
         if not treeShot in self.seqActions.keys():
             print('Dispatch Table missing')
             return
+        print('DO SEQUENCE 1')
         self.currSeqNumbers = {}
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
@@ -260,10 +264,16 @@ class ActionDispatcher:
             self.pendingSeqActions[ident] = []
             self.currSeqNumbers[ident] = startSeqNumber - 1
 
+        print('DO SEQUENCE 2')
         self.updateEvent.clear()
 #        self.updateMutex.acquire()
-        self.performSequenceStep(tree, phase)
+        try:
+            self.performSequenceStep(tree, phase)
+        except Exception as e:
+            print(str(e))
+ 
         self.updateMutex.release()
+        print('DO SEQUENCE 3')
         while not self.allSeqTerminated:
             self.updateEvent.wait()
             self.updateEvent.clear()
@@ -283,6 +293,8 @@ class ActionDispatcher:
             print('Phase '+self.currPhase+ ' terminated')
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             self.allSeqTerminated = False #to avoid duplication of notification from handleNotification(both under lock)
+            self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated'
+            self.reportSnapshot()
         self.updateMutex.release()
 
  
@@ -312,7 +324,8 @@ class ActionDispatcher:
                             self.pendingSeqActions[ident].append(actNid)
                             self.red.lpush('ACTION_SERVER_TODO:'+ident, 
                                 tree.name+'+'+str(tree.shot)+'+'+tree.getNode(actNid).getFullPath()+'+'+str(actNid)+'+'+str(self.timeouts[treeShot][actNid]))
-                            print('Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
+                            date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+                            print(date + '    Dispatching action '+fullPath+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
                             self.actionDispatchStatus[treeShot][actNid] = self.DISPATCHED
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DISPATCHED')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'None') 
@@ -322,6 +335,7 @@ class ActionDispatcher:
                             #self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'NotExecuted')
+                            self.updateMonitorServerInfo(ident, False)
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')
@@ -333,6 +347,7 @@ class ActionDispatcher:
             
 
     def doPhase(self, tree, phase):
+        self.phaseInfoMsg = 'Phase '+phase+' running'
         self.red.hset('DISPATCH_INFO', 'CURR_PHASE', phase)
         self.currPhase = phase
         treeShot = tree.name+str(tree.shot)
@@ -395,9 +410,11 @@ class ActionDispatcher:
                     print('Error creating pulse ' + treeName + '   ' + str(shot) + '   ' + ': '+str(e))
                 self.resetRedisInfo(treeName, parts[2])
                 self.monitorSnapshot = {}
+                self.phaseInfoMsg = ''
                 self.reportSnapshot()
                 self.red.hset('DISPATCH_INFO', 'CURR_TREE', treeName)
                 self.red.hset('DISPATCH_INFO', 'CURR_SHOT', shot)
+
             elif msg.upper()[:12] == 'BUILD_TABLES':
                 parts = msg.split(':')
                 if len(parts) != 3:
@@ -510,7 +527,8 @@ class ActionDispatcher:
                         if serverExists:
                             self.red.lpush('ACTION_SERVER_TODO:'+ident, 
                                 treeName+'+'+str(shot)+'+'+tree.getNode(depNid).getFullPath()+'+'+str(depNid)+'+'+str(self.timeouts[treeShot][depNid]))
-                            print('Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
+                            date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+                            print(date + '    Dispatching action '+tree.getNode(depNid).getFullPath()+'   Tree: '+tree.name+'  Shot: '+str(tree.shot))
                             self.red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'DISPATCHED')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'none')
                             if not ident in self.pendingDepActions.keys():
@@ -522,6 +540,7 @@ class ActionDispatcher:
                             print('SERVER MISSING for '+tree.getNode(depNid).getFullPath())
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'NotExecuted')
+                            self.updateMonitorServerInfo(ident, False)
 
 
 #            self.updateMutex.release() GABRIELE AUG 2026
@@ -537,6 +556,8 @@ class ActionDispatcher:
                 #if self.allDepTerminated:
                 if self.allDepTerminated and self.allSeqTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
+                    self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated'
+                    self.reportSnapshot()
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
                     self.allDepTerminated = False #to avoid duplication of notification from doSequence (both under lock)
             self.updateMutex.release() #GABRIELE AUG 2026
@@ -649,6 +670,7 @@ class ActionDispatcher:
         wasAlive = {}
         heartbeats = {}
         while True:
+            self.crashedServers = []
             idents = self.identList[:]
             for ident in idents:
                 ids = self.getServerIds(ident)
@@ -660,6 +682,8 @@ class ActionDispatcher:
                         self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                         if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                             self.removeDeadPending(self.tree, ident, id)
+                            if ident+':'+str(id) in wasAlive.keys() and wasAlive[ident+':'+str(id)]:
+                                self.crashedServers.append(ident+':'+str(id))
                             self.updateMonitorServerInfo(ident, False)
                         wasAlive[ident+':'+str(id)] = False
                     else:
@@ -676,6 +700,8 @@ class ActionDispatcher:
                         self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'OFF')  
                         if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                             self.removeDeadPending(self.tree, ident, id)
+                            if ident+':'+str(id) in wasAlive.keys() and wasAlive[ident+':'+str(id)]:
+                                self.crashedServers.append(ident+':'+str(id))
                             self.updateMonitorServerInfo(ident, False)
                         wasAlive[ident+':'+str(id)] = False
                     else:
@@ -685,13 +711,17 @@ class ActionDispatcher:
                             if not (ident+':'+str(id)) in wasAlive.keys() or wasAlive[ident+':'+str(id)]:
                                 print('Watchdog Failed for server class'+ident+' id '+str(id)+': server not responding')
                                 self.removeDeadPending(self.tree, ident, id)
+                                if ident+':'+str(id) in wasAlive.keys() and wasAlive[ident+':'+str(id)]:
+                                    self.crashedServers.append(ident+':'+str(id))
+                                self.updateMonitorServerInfo(ident, False)
                             wasAlive[ident+':'+str(id)] = False
                         else:
                             if not (ident+':'+str(id)) in wasAlive.keys() or not wasAlive[ident+':'+str(id)]:
                                 self.updateMonitorServerInfo(ident, True)
                             wasAlive[ident+':'+str(id)] = True
                             self.red.hset('ACTION_SERVER_ACTIVE:'+ident, str(id), 'ON')  
-                            
+            if len(self.crashedServers) > 0:
+                self.reportCrashedServerInfo()                   
  
 
 
@@ -734,7 +764,6 @@ class ActionDispatcher:
                 else:
                     self.monitorSnapshot[currPath]['status'] = 'SERVER_OFF'
         self.reportSnapshot()
-    
 #Used to update DOING action status status originated by servers, published in ACTION_DISPATCHER_AUX_PUBSUB and to be reported in monitorSnapshot
     def handleAuxNotifications(self):
         while True:
@@ -757,7 +786,7 @@ class ActionDispatcher:
             self.updateMutex.release()
 
 #Publish json version of current snapshot divided by current phase and general
-    def getSnapshotJson(self):
+    def getSnapshotJson(self, reportCrashed = False):
         fullInfo = []
         try:
             currTree = self.treeName
@@ -788,14 +817,28 @@ class ActionDispatcher:
         activeInfo = [
                 item for item in sortedFullInfo
                 if item['phase'] == currPhase and item['status'] != 'OFF' #Filter out OFF Actions
-            ]                           
+            ]       
+
         self.updateMutex.release()
-        return json.dumps({'data': sortedFullInfo, 'data_active': activeInfo})
+        if reportCrashed:
+            crashedMsg = ''
+            for crashedServer in self.crashedServers:
+                crashedMsg += crashedServer.split(':')[0] + '  Id: ' + crashedServer.split(':')[1] + '   '
+            if crashedMsg == '':
+                crashedMsg = 'none'
+            return json.dumps({'data': sortedFullInfo, 'data_active': activeInfo, 'phase_info_msg': self.phaseInfoMsg, 'crashed_servers': crashedMsg})
+
+        else:
+            print('phase_info_msg: ', self.phaseInfoMsg)    
+            return json.dumps({'data': sortedFullInfo, 'data_active': activeInfo, 'phase_info_msg': self.phaseInfoMsg, 'crashed_servers': 'none'})
   
         
     def publishSnapshot(self):
         self.red.publish('SNAPSHOT_PUBSUB', self.getSnapshotJson())
 
+    def reportCrashedServerInfo(self): #This is really asynchronous
+        self.red.publish('SNAPSHOT_PUBSUB', self.getSnapshotJson(reportCrashed = True))
+ 
 
     def reportSnapshot(self):
         self.isSnapshotPending = True

@@ -343,6 +343,7 @@ TEMPLATE = """
     </form>
 
     <h3>Redis Action Status Monitor</h3>
+    <h2 id="phase-info"></h2>
     <h2 id="action-summary"></h2>
 
     <h3>Redis Action Status Monitor - Current Phase </h3>   
@@ -427,13 +428,19 @@ TEMPLATE = """
         const parsed = JSON.parse(event.data);
         const data = parsed.data;
         const data_active = parsed.data_active;
+        const phase_info_msg = parsed.phase_info_msg;
+        const crashed_servers = parsed.crashed_servers;
 
+        if (crashed_servers != 'none')
+            alert('Server Crashed: '+crashed_servers);
+            
         //const data = JSON.parse(event.data);
         //const data_active = JSON.parse(event.data_active);
 
         const tbody = document.getElementById('actions-table');
         const tbody_active = document.getElementById('actions-table-active');
 
+        const phase_info = document.getElementById('phase-info');
         const summary = document.getElementById('action-summary');
         tbody.innerHTML = '';
         tbody_active.innerHTML = '';
@@ -449,7 +456,8 @@ TEMPLATE = """
         let aborted = 0; 
         let success = 0; 
         let unknown = 0; 
-        let off = 0;     
+        let off = 0;   
+        let current_shot = 0  
 
 
         data_active.forEach(item => {
@@ -490,6 +498,7 @@ TEMPLATE = """
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'ABORT')">Abort</button>
                    <button onclick="sendActionCommand('${item.tree}' , '${item.shot}' , '${item.server}',  '${item.key}', 'LOGS');showWarning();">Logs</button>
                 </td>`;
+	    current_shot = item.shot;
             tbody_active.appendChild(row_active);
         });
 
@@ -555,6 +564,10 @@ TEMPLATE = """
                 </td>`;
             tbody.appendChild(row);
         });
+        phase_info.innerHTML = `
+            <font color="black"> Shot: ${current_shot}</font>
+            <font color="black"> ${phase_info_msg} </font> 
+        `;      
         summary.innerHTML = `
             <font color="brown">
                 Active actions: ${total-off} &nbsp;
