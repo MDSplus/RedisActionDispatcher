@@ -781,8 +781,11 @@ class ActionDispatcher:
             if status != 'DOING':
                 print('Internal error in handleAuxNotification, unexpected status: ', status)
             self.updateMutex.acquire()
-            self.monitorSnapshot[path]['status'] = status
-            self.reportSnapshot()
+            try:
+                self.monitorSnapshot[path]['status'] = status
+                self.reportSnapshot()
+            except:
+                pass
             self.updateMutex.release()
 
 #Publish json version of current snapshot divided by current phase and general

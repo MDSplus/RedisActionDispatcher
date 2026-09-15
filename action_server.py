@@ -16,6 +16,11 @@ import socket
 import threading 
 from datetime import datetime
 import argparse
+try:
+    import queue
+except ImportError:
+    import Queue as queue
+
 
 lastTree = ''
 lastShot = '0'
@@ -269,6 +274,154 @@ def handleExecute(treeName, shot, actionPath, timeout, red, ident, serverId, act
         red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
 
 
+########################SINGLE THREAD WORKER############################################
+class WorkDescription:
+    def __init__(self, treeName, treeShot, actionPath, actionNid):
+        self.treeName = treeName
+        self.treeShot = treeShot
+        self.actionPath = actionPath
+        self.actionNid = actionNid
+
+
+class WorkerThread(threading.Thread):
+    def __init__(self, inQueue, outQueue):
+        super(WorkerThread, self).__init__(name="worker")
+        self.inQueue = inQueue
+        self.outQueue = outQueue
+        self.tree = None
+        self.treeName = ''
+        self.treeShot = 0
+    
+    def run(self):
+        while True:
+            message = self.inQueue.get()
+            if message == None:
+                return
+            status = self.processMessage(message)
+            self.outQueue.put(status)
+
+    def processMessage(self, message):
+        try:
+            if message.treeName != self.treeName or message.treeShot != self.treeShot:
+                self.tree = MDSplus.Tree(message.treeName, message.treeShot)
+                self.treeName = message.treeName
+                self.treeShot = message.treeShot
+
+            node = self.tree.getNode(message.actionPath)
+            task = node.getData().getTask()
+            date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
+            print(date + ', Doing '+ message.actionPath + ' in '+self.treeName+ ' shot ' + str(message.treeShot))
+            if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
+                self.tree.tcl('do '+ message.actionPath)
+                status = 'Success'
+            elif isinstance(task, MDSplus.Method):
+                status = task.getObject().doMethod(task.getMethod())
+                if status == None:
+                    status = 'Success'
+                elif status % 2 != 0:
+                    status = 'Success'
+                else:
+                    status = 'Failure'
+            else:
+                status = int(task.data())
+                if status % 2 != 0:
+                    status = 'Success'
+                else:
+                    status = 'Failure'
+            return status
+        except Exception as exc:
+                status = 'Failure'
+                try:
+                    traceback.print_exc(exc)
+                except:
+                    pass
+                return status
+ ################End Class WorkerThread*****************
+
+def doThreadAction(threadSupervisor, treeName, shot, actionPath, actionNid, timeout, red, ident, serverId, notifyDone):
+    threadSupervisor.do(treeName, shot, actionPath, actionNid, timeout, red, ident, serverId, notifyDone)
+
+
+class SingleThreadSupervisor:
+    def __init__(self):
+       self.commandQueue = queue.Queue()
+       self.statusQueue = queue.Queue()
+       self.worker =  WorkerThread(self.commandQueue, self.statusQueue)
+       self.worker.start()
+       self.pid = os.getppid()
+       self.mutex = threading.Lock()
+
+    def do(self, treeName, shot, actionPath, actionNid, timeout, red, ident, serverId, notifyDone):
+        self.mutex.acquire()
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DOING')
+        red.publish('ACTION_DISPATCHER_AUX_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+        red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ treeName+'+'+str(shot)+'+'+ident+'+'+str(serverId)+'+'+actionPath+'+'+actionNid)
+        red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'None')
+        red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
+        isWindows = (sys.platform == 'win32')
+        if not isWindows:
+            originalStdoutFd = os.dup(1)  # duplicate fd 1
+            originalStderrFd = os.dup(2)  # duplicate fd 1
+            outFd = open(str(self.pid)+'Log.out',  'w')
+            os.dup2(outFd.fileno(), 1)
+            os.dup2(outFd.fileno(), 2)
+        self.commandQueue.put(WorkDescription(treeName, shot, actionPath, actionNid))
+        if timeout == 0:
+            timeoutTicks = 2000000
+        else:
+            timeoutTicks = int(2*timeout)
+        aborted = True
+        for i in range(timeoutTicks):
+            try:
+                status = self.statusQueue.get(timeout = 0.5)
+                aborted = False
+                break
+            except queue.Empty:
+                pass
+            if red.hget('ABORT_REQUESTS:'+ident, actionPath) == b'1':
+                red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, 'Aborted')
+                break
+        if aborted:
+            status = 'Aborted'
+            self.commandQueue = queue.Queue()
+            self.statusQueue = queue.Queue()
+            self.worker =  WorkerThread(self.commandQueue, self.statusQueue)
+            self.worker.start()
+
+        
+
+        if not isWindows:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            outFd.flush()
+            os.fsync(outFd)
+            outFd.close()
+            os.dup2(originalStdoutFd, 1)
+            os.dup2(originalStderrFd, 2)
+            logFile = open(str(self.pid) + 'Log.out', 'r')
+            log = logFile.read()
+            logFile.close()
+            os.system('rm '+str(self.pid) + 'Log.out')
+        else:
+            log = '' 
+        print("LOG:")
+        print(log)
+        print("*****")
+
+
+        red.hincrby('ACTION_SERVER_DOING:'+ident, serverId, -1)
+        if notifyDone:
+            st = treeName +'+'+str(shot)+'+'+ident + '+' + actionPath + '+'+status
+            st += '+'+makeASCII(log)
+            red.publish('ACTION_DISPATCHER_PUBSUB',st)
+        else:
+            red.hset('ACTION_STATUS:'+treeName+':'+str(shot), actionPath, status)
+ 
+        red.hset('ABORT_REQUESTS:'+ident, actionPath, '0')
+        red.hset('ACTION_INFO:'+treeName+':'+str(shot)+':'+ident, actionPath, 'DONE')
+        self.mutex.release()
+ 
+##############################################################################################
 
 
 class WorkerAction:
@@ -331,6 +484,8 @@ class ActionServer:
         ip = socket.gethostbyname(socket.gethostname())
         red.hset('ACTION_SERVER_IP:'+self.ident, self.serverId, ip)
 
+        self.workerSupervisor = SingleThreadSupervisor()
+
 
     def handleDo(self, isSequential, isProcess, mutex):
         global lastTree, lastShot
@@ -351,8 +506,15 @@ class ActionServer:
             lastShot = items[1]
             self.red.hincrby('ACTION_SERVER_DOING:'+self.ident, self.serverId, 1)
             
-            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, isSequential, isProcess, mutex, notifyDone)
-            worker.spawn()
+#            worker = WorkerAction(items[0], int(items[1]), items[2], items[3], timeout, self.ident, self.serverId, self.red, isSequential, isProcess, mutex, notifyDone)
+#            worker.spawn()
+
+            if isProcess:
+                p = threading.Thread(target=handleExecuteProcess, args = (self.treeName, self.shot, self.actionPath, self.timeout, self.red, self.ident, self.serverId, self.actionNid, self.notifyDone, ))
+            else:
+                p = threading.Thread(target = doThreadAction, args = (self.workerSupervisor, items[0], int(items[1]), items[2], items[3], timeout, self.red, self.ident, self.serverId, notifyDone))
+                p.start()
+                #self.workerSupervisor.do(items[0], int(items[1]), items[2], items[3], timeout, self.red, self.ident, self.serverId, notifyDone)
 
     def handleCommands(self, isSequential, isProcess):
         global lastTree, lastShot
