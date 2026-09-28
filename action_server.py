@@ -303,6 +303,10 @@ class WorkerThread(threading.Thread):
     def processMessage(self, message):
         try:
             if message.treeName != self.treeName or message.treeShot != self.treeShot:
+                try:
+                    self.tree.close()
+                except:
+                    pass
                 self.tree = MDSplus.Tree(message.treeName, message.treeShot)
                 self.treeName = message.treeName
                 self.treeShot = message.treeShot
