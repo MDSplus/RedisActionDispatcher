@@ -147,7 +147,7 @@ def execute(treeName, shot, actionPath, tid, isSequential):
         node = tree.getNode(actionPath)
         task = node.getData().getTask()
         date = datetime.today().strftime('%a %b %d %H:%M:%S CET %Y')
-       print(date + ', Doing '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
+        print(date + ', Doing '+ actionPath + ' in '+treeName+ ' shot ' + str(shot))
         if isinstance(task, MDSplus.Program) or isinstance(task, MDSplus.Procedure or isinstance(task, MDSplus.Routine)):
             tree.tcl('do '+ actionPath)
             status = 'Success'
