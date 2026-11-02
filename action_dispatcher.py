@@ -16,6 +16,9 @@ treeLOGICAL_AND = 45
 treeLOGICAL_OR = 267
 treeLOGICAL_OF = 229
 
+phaseTerminatedEvent = os.getenv('dispatcher_phase_termination_event')
+if phaseTerminatedEvent == None:
+    phaseTerminatedEvent = 'DISPATCHER_PHASE_TERMINATED'
 
 def getDepActionNids(actionNode):
     action = actionNode.getData()
@@ -68,6 +71,9 @@ class ActionDispatcher:
     # completionEvent keeps track for every action nid for this action server the possible completion event
     # completionEvent Dictionary{tree+shot:{Dictionary{nid: event name}}
     # 
+    # isEssential keeps track for every action nid for this action server the value (true/false) of the cexxential flag
+    # isEssential Dictionary{tree+shot:{Dictionary{nid: isEssential}}
+    # 
     # actionDispatchStatus keeps track of the current dispatching status of actions (NOT_DISPATCHED, DISPATCHED, DONE)
     # actionDispatchStatus Dictionary{tree+shot:{Dictionary{nid: status}} 
     # 
@@ -85,6 +91,7 @@ class ActionDispatcher:
         self.idents = {}
         self.timeouts = {}
         self.completionEvent = {}
+        self.isEssential = {}
         self.actionDispatchStatus = {}
         self.identList = []
         self.cmdPubsub = red.pubsub()
@@ -161,6 +168,7 @@ class ActionDispatcher:
         self.depActions[treeShot] = {}
         self.depAffected[treeShot] = {}
         self.completionEvent[treeShot] = {}
+        self.isEssential[treeShot] = {}
         self.idents[treeShot] = {}
         self.timeouts[treeShot] = {}
         self.dependencies[treeShot] = {}
@@ -210,6 +218,7 @@ class ActionDispatcher:
                     completionName = disp.getCompletion().getString()
                     if completionName != '':
                         self.completionEvent[treeShot][actNid] = completionName
+                    self.isEssential[treesShot][actNid] = d.isEssential()
                     self.idents[treeShot][actNid] = ident
                     self.timeouts[treeShot][actNid] = timeout
                     if not isinstance(when, MDSplus.Scalar): #if it is a dependent action
@@ -254,7 +263,6 @@ class ActionDispatcher:
         if not treeShot in self.seqActions.keys():
             print('Dispatch Table missing')
             return
-        print('DO SEQUENCE 1')
         self.currSeqNumbers = {}
         self.pendingSeqActions = {}
         self.pendingDepActions = {}
@@ -264,7 +272,6 @@ class ActionDispatcher:
             self.pendingSeqActions[ident] = []
             self.currSeqNumbers[ident] = startSeqNumber - 1
 
-        print('DO SEQUENCE 2')
         self.updateEvent.clear()
 #        self.updateMutex.acquire()
         try:
@@ -273,7 +280,6 @@ class ActionDispatcher:
             print(str(e))
  
         self.updateMutex.release()
-        print('DO SEQUENCE 3')
         while not self.allSeqTerminated:
             self.updateEvent.wait()
             self.updateEvent.clear()
@@ -290,11 +296,14 @@ class ActionDispatcher:
         print('DoSequence terminated')
         self.updateMutex.acquire()
         if self.allDepTerminated:
-            print('Phase '+self.currPhase+ ' terminated')
+            print('Phase '+self.currPhase+ ' terminated. Failed actions: '+str(self.failCount)+' ('+str(self.essentialFailCount) + ' essential)')
+            self.red.publish('ACTION_FAIL_COUNT:'+tree.name+':'+str(tree.shot), self.currPhase, str(self.failCount))
+            self.red.publish('ACTION_ESSENTIAL_FAIL_COUNT:'+tree.name+':'+str(tree.shot), self.currPhase, str(self.essentialFailCount))
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             self.allSeqTerminated = False #to avoid duplication of notification from handleNotification(both under lock)
-            self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated'
+            self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated. Failed actions: '+str(self.failCount)+' ('+str(self.essentialFailCount) + ' essential)'
             self.reportSnapshot()
+            MDSplus.Event.setevent(phaseTerminatedEvent, MDSplus.String(self.currPhase+' '+str(self.failCount)+' '+str(self.essentialFailCount)))
         self.updateMutex.release()
 
  
@@ -347,6 +356,8 @@ class ActionDispatcher:
             
 
     def doPhase(self, tree, phase):
+        self.failCount = 0
+        self.essentialFailCount = 0
         self.phaseInfoMsg = 'Phase '+phase+' running'
         self.red.hset('DISPATCH_INFO', 'CURR_PHASE', phase)
         self.currPhase = phase
@@ -369,7 +380,7 @@ class ActionDispatcher:
                         minSeqNumber = seqNum
             print('Action collected, doing sequence')
             self.doSequence(tree, phase, minSeqNumber, maxSeqNumber)
-            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
+ #  GABRIELE OCT 2026        self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
         except:
             self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
             print('Either phase('+phase+'), tree ('+tree.name+') or shot('+str(tree.shot)+') are missing in dispatch tables')      
@@ -497,6 +508,14 @@ class ActionDispatcher:
                 continue
             path = parts[3]
             print('Action '+path+ '   terminated. Status:  '+ parts[4])
+            if(parts[4] != 'Success'):
+                self.failCount += 1
+                if self.isEssential[treeShot][path]:
+                    self.essentialFailCount += 1
+            try:
+                MDSplus.Event.setevent(self.completionEvent[treeShot][actionNid], MDSplus.String(parts[4])) 
+            except:
+                pass
             self.updateMutex.acquire()
             self.monitorSnapshot[path]['status'] = 'DONE'
             self.monitorSnapshot[path]['state'] = parts[4]
@@ -555,9 +574,12 @@ class ActionDispatcher:
                         self.allDepTerminated = False
                 #if self.allDepTerminated:
                 if self.allDepTerminated and self.allSeqTerminated:
-                    print('Phase '+self.currPhase+ ' terminated')
-                    self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated'
+                    print('Phase '+self.currPhase+ ' terminated. Failed actions: '+str(self.failCount)+' ('+str(self.essentialFailCount) + ' essential)')
+                    self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated. Failed actions: '+str(self.failCount)+' ('+str(self.essentialFailCount) + ' essential)'
                     self.reportSnapshot()
+                    MDSplus.Event.setevent(phaseTerminatedEvent, MDSplus.String(self.currPhase+' '+str(self.failCount)+' '+str(self.essentialFailCount)))
+                    self.red.publish('ACTION_FAIL_COUNT:'+tree.name+':'+str(tree.shot), self.currPhase, str(self.failCount))
+                    self.red.publish('ACTION_ESSENTIAL_FAIL_COUNT:'+tree.name+':'+str(tree.shot), self.currPhase, str(self.essentialFailCount))
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
                     self.allDepTerminated = False #to avoid duplication of notification from doSequence (both under lock)
             self.updateMutex.release() #GABRIELE AUG 2026
