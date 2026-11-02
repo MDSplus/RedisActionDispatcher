@@ -288,6 +288,7 @@ class ActionDispatcher:
         self.doing = False
         
         print('DoSequence terminated')
+        self.reportSnapshot()
         self.updateMutex.acquire()
         if self.allDepTerminated:
             print('Phase '+self.currPhase+ ' terminated')
@@ -556,6 +557,7 @@ class ActionDispatcher:
                 #if self.allDepTerminated:
                 if self.allDepTerminated and self.allSeqTerminated:
                     print('Phase '+self.currPhase+ ' terminated')
+                    self.reportSnapshot()
                     self.phaseInfoMsg = 'Phase '+self.currPhase+ ' terminated'
                     self.reportSnapshot()
                     self.red.publish('DISPATCH_MONITOR_PUBSUB', 'END_PHASE+'+ tree.name+'+'+str(tree.shot)+'+'+self.currPhase)
