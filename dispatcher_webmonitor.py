@@ -161,6 +161,34 @@ def ShowLastLog():
 
     return jsonify(message)
 
+@app.route("/showserverlog")
+def ShowServerLog():
+    time.sleep(1) # Even with semaphore Firefox fails to make the actions in sequence! Chrome works well without this sleep!
+    with warning_sem:
+        print("Starting ShowServerLog()")
+        file="show.server.log"
+        #while not os.path.exists(file):
+        #    time.sleep(0.1)
+            
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                message = f.read().strip()
+                message = message.replace("\\n", "\n")
+                message = message.replace("\\r", "")
+                message
+        except FileNotFoundError:
+            message = "⚠️ No log file found."
+            print(message)
+        except Exception as e:
+            message = f"Error reading log: {e}"
+            print(message)
+        
+        cmd="rm "+file
+        os.system(cmd)
+
+    return jsonify(message)
+
+
 
 
 
@@ -191,7 +219,8 @@ def index():
     servers = get_active_servers()
     print(servers)
 
-    return render_template_string(TEMPLATE, servers=servers)
+    edit = "edit" in request.args  # Show the action controls when the URL contains ?edit
+    return render_template_string(TEMPLATE, servers=servers, edit=edit)
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -328,7 +357,7 @@ TEMPLATE = """
 
 <div id="executing" class="tab-content active">
     <h3>Actions</h3>
-    <form id="unifiedForm">
+    <form id="unifiedForm" {% if not edit %}hidden{% endif %}>
     <input type="text" name="server" placeholder="localhost" style="width: 150px;" required />
     <input type="text" name="tree" placeholder="tree" style="width: 150px;" required />
     <input type="text" name="shot" placeholder="shot_number" style="width: 150px;" required />
@@ -385,6 +414,20 @@ TEMPLATE = """
           }
         }
 
+        async function showServerWarning() {
+          try {
+            let response = await fetch("/showserverlog");
+            let log_data = await response.json();   // <-- parse JSON
+
+            let logWindow = window.open("", "LogServerWindow", "width=800,height=600,scrollbars=yes,resizable=yes");
+            logWindow.document.write("<pre>" + log_data + "</pre>");
+          } catch (err) {
+            console.error("Fetch error:", err);
+          }
+        }
+
+
+
     function showTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
@@ -413,6 +456,7 @@ TEMPLATE = """
                     <button onclick="sendCommand('${item.key}', 'QUIT')">Quit Server</button>
                     <button onclick="sendCommand('${item.key}', 'RESTART')">Restart Server</button>
                     <button onclick="sendCommand('${item.key}', 'KILL')">Kill Server</button>
+                    <button onclick="sendCommand('${item.key}', 'LOGS').then(() => showServerWarning())">Logs</button>
 <!--
                     <button onclick="sendCommand('${item.key}', 'STOP')">Stop Actions</button>
                     <button onclick="sendCommand('${item.key}', 'SERVER_LOG')">Server Log</button>
@@ -589,7 +633,7 @@ TEMPLATE = """
 
 
     function sendCommand(serverKey, command) {
-        fetch('/server_command', {
+        return fetch('/server_command', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ server_key: serverKey, command: command })
@@ -706,7 +750,8 @@ def get_data():
                 })
 
             # Sort: first by whether status is 'ON' (False < True), then alphabetically by key
-            data.sort(key=lambda x: (x['status'] != 'ON', x['key']))
+           # data.sort(key=lambda x: (x['status'] != 'ON', x['key']))
+            data.sort(key=lambda x: (x['key']))
 
             yield f"data: {json.dumps(data)}\n\n"
             #print(f"data: {json.dumps(data)}\n\n")
@@ -893,8 +938,11 @@ def handle_command():
         cmd = f"sh server_command.sh {server_key} {command} &"
         os.system(cmd)
 
-    print(f"Running shell command: {cmd} ")
-    logging.warning(f"Running shell command: {cmd} ")
+    if command == 'LOGS':
+        cmd = f"sh server_command.sh {server_key} {command} >> show.server.log &"
+        os.system(cmd)
+
+    logging.warning(f"handle_command(): unrecognized command:  "+command)
 
 
 
