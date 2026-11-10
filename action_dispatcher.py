@@ -348,7 +348,7 @@ class ActionDispatcher:
                             self.updateMonitorServerInfo(ident, False)
                             self.failCount += 1
                             treeShot = tree.name+str(tree.shot)
-                            if self.isEssential[treeShot][actionNid]:
+                            if self.isEssential[treeShot][actNid]:
                                 self.essentialFailCount += 1
 
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
