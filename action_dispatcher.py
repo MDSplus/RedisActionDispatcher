@@ -242,7 +242,7 @@ class ActionDispatcher:
                 self.red.hset('ACTION_SERVER_INFO:'+tree.name+':'+str(tree.shot),  d.getFullPath(), ident)
                 self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(actNid).getFullPath(), 'OFF')
                 self.monitorSnapshot[path]['status'] = 'OFF'
-        
+                self.reportSnapshot()
         self.printTables()
         self.phaseInfoMsg = ''
         self.reportSnapshot()
@@ -346,6 +346,11 @@ class ActionDispatcher:
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'NotExecuted')
                             self.updateMonitorServerInfo(ident, False)
+                            self.failCount += 1
+                            treeShot = tree.name+str(tree.shot)
+                            if self.isEssential[treeShot][actionNid]:
+                                self.essentialFailCount += 1
+
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DISPATCHED+'+ tree.name+'+'+str(tree.shot)+'+'+phase+'+'+ident+'+'+fullPath+'+'+str(actNid))
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DOING+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid))
 #                            self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actNid)+'+0')
@@ -562,7 +567,10 @@ class ActionDispatcher:
                             self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, tree.getNode(depNid).getFullPath(), 'SERVER_OFF')
                             self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), tree.getNode(depNid).getFullPath(), 'NotExecuted')
                             self.updateMonitorServerInfo(ident, False)
-
+                            treeShot = tree.name+str(tree.shot)
+                            self.failCount += 1
+                            if self.isEssential[treeShot][actionNid]:
+                                self.essentialFailCount += 1
 
 #            self.updateMutex.release() GABRIELE AUG 2026
             sequentialTerminated = True
@@ -649,6 +657,14 @@ class ActionDispatcher:
                     print('Removing sequential action due to server crash ('+str(len(self.pendingSeqActions[ident]))+'): ', fullPath)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
+                    self.monitorSnapshot[fullPath]['status'] = 'DONE'
+                    self.monitorSnapshot[fullPath]['state'] = 'serverCrashed'
+                    self.reportSnapshot()            
+                    self.failCount += 1
+                    treeShot = tree.name+str(tree.shot)
+                    if self.isEssential[treeShot][actionNid]:
+                        self.essentialFailCount += 1
+
 #                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
 #            self.pendingSeqActions[ident].clear()
             self.pendingSeqActions[ident] = []
@@ -674,8 +690,13 @@ class ActionDispatcher:
                     print('Removing dependent action due to server crash ('+str(len(self.pendingDepActions[ident]))+'): ', fullPath)
                     self.red.hset('ACTION_INFO:'+tree.name+':'+str(tree.shot)+':'+ident, fullPath, 'DONE')
                     self.red.hset('ACTION_STATUS:'+tree.name+':'+str(tree.shot), fullPath, 'ServerCrashed')
-#                    self.red.publish('DISPATCH_MONITOR_PUBSUB', 'DONE+'+ tree.name+'+'+str(tree.shot)+'+'+ident+'+0+'+fullPath+'+'+str(actionNid)+'+0')
-#            self.pendingDepActions[ident].clear()
+                    self.monitorSnapshot[fullPath]['status'] = 'DONE'
+                    self.monitorSnapshot[fullPath]['state'] = 'serverCrashed'
+                    self.reportSnapshot()            
+                    self.failCount += 1
+                    treeShot = tree.name+str(tree.shot)
+                    if self.isEssential[treeShot][actionNid]:
+                        self.essentialFailCount += 1
             self.pendingDepActions[ident] = []
             self.updateEvent.set()
         self.updateMutex.release()
